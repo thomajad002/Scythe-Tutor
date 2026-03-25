@@ -1,6 +1,27 @@
-# CS4610 Next.js + Supabase Starter App
+# Scythe Scoring Intelligent Tutor
 
-Reusable starter app for future projects with:
+Project for building an intelligent tutoring system that teaches Scythe end-game scoring with deterministic rule-based feedback.
+
+This repository started from a reusable Next.js + Supabase starter and now includes the first Scythe-specific implementation slice.
+
+## Current Implementation Status
+
+Completed in this milestone:
+
+- Planning docs upgraded for proposal-aligned implementation (`plan.md`, `task.md`)
+- Core tutoring domain schema + migration added (`knowledge_components`, `scoring_scenarios`, attempts, step attempts, error events, KC mastery)
+- Seed data added with 10 Scythe scoring scenarios and 5 knowledge components
+- Deterministic scoring + mistake classification module added (`lib/scythe/scoring.ts`)
+- Test suite extended for scoring engine and constraints (`tests/lib/scythe-scoring.test.ts`)
+
+Completed in current milestone:
+
+- Added authenticated `/tutor` route with enforced gate model
+- Added skip-check assessment flow and persistence
+- Added progression persistence (`tutor_progress`, `subtype_attempt_events`, `skip_check_attempts`)
+- Added tutor progression logic module (`lib/tutor/progression.ts`) and tests
+
+Starter foundation retained:
 
 - Next.js App Router + TypeScript + Tailwind CSS v4
 - Supabase auth integration using `@supabase/ssr`
@@ -50,6 +71,7 @@ Set these values in `.env.local` (or let `setup.sh` set them):
 - `/signup` Email/password sign-up form
 - `/dashboard` Protected route showing user/profile data
 - `/profile` Protected route for profile updates + avatar upload
+- `/tutor` Protected route for gated mastery flow and skip-check unlock logic
 
 ## Authentication Pattern
 
@@ -67,8 +89,12 @@ Authentication is standardized with reusable helpers:
 ## Supabase Structure
 
 - Declarative schema: [supabase/schemas/profiles.sql](supabase/schemas/profiles.sql)
+- Declarative schema: [supabase/schemas/scythe_tutor.sql](supabase/schemas/scythe_tutor.sql)
 - Migration SQL: [supabase/migrations/20260225000100_init_profiles_and_auth.sql](supabase/migrations/20260225000100_init_profiles_and_auth.sql)
+- Migration SQL: [supabase/migrations/20260325000100_add_scythe_tutor_core.sql](supabase/migrations/20260325000100_add_scythe_tutor_core.sql)
+- Migration SQL: [supabase/migrations/20260325000200_add_tutor_progression.sql](supabase/migrations/20260325000200_add_tutor_progression.sql)
 - Supabase config: [supabase/config.toml](supabase/config.toml)
+- Seed data: [supabase/seed.sql](supabase/seed.sql)
 
 Generate a migration after declarative schema changes:
 
@@ -85,6 +111,46 @@ npx supabase db diff -f <migration_name>
 - `full_name text`
 - `avatar_url text`
 - `updated_at timestamptz`
+
+### Scythe Tutor Models (Initial)
+
+- `public.knowledge_components`
+- `public.scoring_scenarios`
+- `public.scenario_attempts`
+- `public.scenario_step_attempts`
+- `public.error_events`
+- `public.kc_mastery`
+- `public.tutor_progress`
+- `public.subtype_attempt_events`
+- `public.skip_check_attempts`
+
+These tables provide the core data model for the inner tutoring loop: scenario selection, step-level submissions, feedback/error tracking, and per-KC mastery progress.
+
+### Tutor Progression Model
+
+`/tutor` currently enforces this gate order:
+
+- Subtype mastery
+- Single-player full-score gate
+- Multiplayer progression from 2 to 5 players
+- Speed challenge unlock
+
+Skip-check can bypass tutorial gates only if the full assessment is perfect.
+
+## Scoring Engine
+
+Core rule-based scoring and constraint evaluation live in [lib/scythe/scoring.ts](lib/scythe/scoring.ts).
+
+Implemented capabilities:
+
+- Popularity tier classification (`low`, `mid`, `high`)
+- Category scoring for stars, territories, resource pairs, and coins
+- Total score calculation
+- Constraint checks and error classification for:
+	- incorrect multiplier usage
+	- resource pair counting mistakes
+	- arithmetic sum errors
+	- omitted category entries
 
 ### Automatic Profile Creation
 
@@ -151,6 +217,8 @@ Example tests included:
 - React component test: [tests/components/button.test.tsx](tests/components/button.test.tsx)
 - Utility test: [tests/lib/format-date.test.ts](tests/lib/format-date.test.ts)
 - Auth-related test: [tests/auth/actions.test.ts](tests/auth/actions.test.ts)
+- Scythe scoring engine test: [tests/lib/scythe-scoring.test.ts](tests/lib/scythe-scoring.test.ts)
+- Tutor progression logic test: [tests/lib/tutor-progression.test.ts](tests/lib/tutor-progression.test.ts)
 
 ## GitHub Actions (DB Migrations)
 

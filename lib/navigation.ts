@@ -23,6 +23,7 @@ export const headerNavConfig: HeaderNavConfig = {
   ],
   authenticatedItems: [
     { label: "Dashboard", href: "/dashboard" },
+    { label: "Tutor", href: "/tutor" },
     { label: "Profile", href: "/profile" },
   ],
   unauthenticatedItems: [

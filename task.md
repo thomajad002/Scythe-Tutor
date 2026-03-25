@@ -1,28 +1,44 @@
-# Starter App Task Checklist
+# Scythe Score Tutor Task Checklist
 
-## Assignment 2 Requirements (Completed)
-- [x] Set up a reusable dark-first color token system
-- [x] Apply clean minimal starter UI styling
-- [x] Set template metadata and baseline copy
-- [x] Create `plan.md` roadmap
-- [x] Create `task.md` actionable checklist
-- [x] Update `README.md` for significant changes
-- [x] Integrate Supabase SSR clients (server + client)
-- [x] Add auth pages and actions (login/signup/signout)
-- [x] Add protected dashboard and profile routes
-- [x] Add profile schema + migration + triggers + RLS policies
-- [x] Add avatar upload flow with storage policies
-- [x] Add `setup.sh` automation script
-- [x] Add unit test setup with example tests
-- [x] Add GitHub Actions migration workflow
+## MVP Requirements
+- [x] Create Supabase schema for scenarios, attempts, step responses, error events, and KC mastery.
+- [x] Generate migration and update `types/database.ts`.
+- [x] Seed at least 10 varied scoring scenarios.
+- [x] Implement deterministic Scythe scoring engine (stars, territories, resources, coins, popularity multipliers).
+- [x] Implement constraint-based rule checks.
+- [x] Implement error classification for common mistakes.
+- [ ] Implement layered hints (L1/L2/L3).
+- [x] Build authenticated `/tutor` step-by-step practice flow.
+- [x] Persist learner responses and feedback events.
+- [ ] Build final attempt summary with score decomposition.
+- [ ] Build mastery/progress visualization by knowledge component.
+- [x] Add test coverage for engine + classifier + tutor actions.
+- [ ] Add structure bonus tile scoring support.
+- [ ] Add winner tiebreaker walkthrough logic.
+- [ ] Add Factory as 3 territories rule handling.
+- [x] Add tutorial bypass assessment and unlock logic.
+- [x] Implement progression gates: subtype -> single-player -> 2-5 players.
+
+## Proposal Alignment Checklist
+- [ ] Teach scoring categories (stars, territories, resources, coins).
+- [ ] Teach multiplier application by popularity.
+- [ ] Teach accurate component and total computation.
+- [ ] Support correction of common mistakes.
+- [ ] Support sequential reasoning and attention-to-detail practice.
+- [ ] Provide immediate step-level feedback.
+- [ ] Provide adaptive support via learner model (minimum: mastery tracking).
+- [ ] Support complete end-game scoring flow including structure bonus and tiebreakers.
+
+## Stretch Goals
+- [ ] Adaptive problem selection (outer loop ITS).
+- [ ] Timed speedrun mode.
+- [ ] Optional LLM hint wording (correctness remains rule-based).
 
 ## Ongoing Rule
-- [x] Each significant change must include a corresponding `README.md` update
+- [x] Each significant change must include a corresponding `README.md` update.
 
 ## Submission Readiness
-- [x] Verify setup flow from clean state (`./setup.sh`)
-- [x] Verify auth flow (sign up, sign in, sign out)
-- [x] Verify protected routes (`/dashboard`, `/profile`)
-- [x] Verify profile trigger + RLS behavior
-- [x] Verify test commands and examples
-- [x] Verify migration workflow documentation
+- [ ] End-to-end flow works from login -> tutor -> progress.
+- [x] Automated tests pass.
+- [ ] README reflects architecture, setup, routes, and testing.
+- [ ] Features map cleanly to all five proposal sections.
