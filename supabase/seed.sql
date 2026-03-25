@@ -1,0 +1,2 @@
+-- Optional seed data file.
+-- Keep empty by default so setup remains idempotent across assignments.
