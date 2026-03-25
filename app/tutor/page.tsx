@@ -44,12 +44,15 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
   const multiplayerUnlocked = progress.skipCheckPassed || progress.singlePlayerMastered;
 
   return (
-    <main className="mx-auto flex min-h-full w-full max-w-5xl px-6 py-10">
+    <main className="mx-auto min-h-full w-full max-w-6xl px-6 py-10 sm:px-10 sm:py-12">
       <div className="w-full space-y-6">
-        <Card className="space-y-4">
-          <h1 className="text-3xl font-semibold">Scythe Tutor</h1>
-          <p className="text-sm text-muted">
-            Minimal gated MVP route: subtype mastery -&gt; single-player -&gt; multiplayer 2-5 -&gt; speed challenge.
+        <Card className="relative overflow-hidden space-y-5">
+          <div className="pointer-events-none absolute -right-20 top-0 h-56 w-56 rounded-full bg-accent/20 blur-3xl" />
+          <p className="text-xs uppercase tracking-[0.2em] text-accent-strong">Guided Mastery Track</p>
+          <h1 className="text-4xl">Scythe Tutor</h1>
+          <p className="max-w-3xl text-sm text-muted">
+            Gate order is enforced in this MVP: subtypes -&gt; single-player -&gt; multiplayer 2-5 -&gt; speed challenge.
+            Perfect skip-check can unlock immediately.
           </p>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-xl border border-border bg-surface-2 p-3 text-sm">
@@ -81,7 +84,8 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
           ) : null}
         </Card>
 
-        <Card className="space-y-3">
+        <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
+          <Card className="space-y-3">
           <h2 className="text-xl font-semibold">Skip Check (Tutorial Bypass)</h2>
           <p className="text-sm text-muted">
             Submit one full-game assessment result. Perfect score unlocks tutorial completion and speed challenge.
@@ -115,9 +119,9 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
               </Button>
             </div>
           </form>
-        </Card>
+          </Card>
 
-        <Card className="space-y-3">
+          <Card className="space-y-3">
           <h2 className="text-xl font-semibold">Subtype Mastery</h2>
           <p className="text-sm text-muted">
             Record subtype practice outcomes. Mastery rule: 2 consecutive first-try correct or 80% in last 5.
@@ -174,9 +178,11 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
               <Button type="submit">Record Subtype Attempt</Button>
             </div>
           </form>
-        </Card>
+          </Card>
+        </div>
 
-        <Card className="space-y-3">
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Card className="space-y-3">
           <h2 className="text-xl font-semibold">Single-Player Gate</h2>
           <p className="text-sm text-muted">
             Locked until all subtypes are mastered (unless skip check passed). Requires 2 consecutive correct rounds.
@@ -202,9 +208,9 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
               Complete subtype mastery first to unlock single-player stage.
             </p>
           )}
-        </Card>
+          </Card>
 
-        <Card className="space-y-3">
+          <Card className="space-y-3">
           <h2 className="text-xl font-semibold">Multiplayer Gate (2-5 Players)</h2>
           <p className="text-sm text-muted">
             Locked until single-player mastery. Correct result at current max unlocks the next player count.
@@ -242,7 +248,8 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
               Complete single-player gate first to unlock multiplayer progression.
             </p>
           )}
-        </Card>
+          </Card>
+        </div>
       </div>
     </main>
   );

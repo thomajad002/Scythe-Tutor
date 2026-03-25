@@ -36,16 +36,17 @@ export default async function ProfilePage({ searchParams }: PageProps) {
   };
 
   return (
-    <main className="mx-auto flex min-h-full w-full max-w-3xl items-center px-6 py-16">
+    <main className="mx-auto min-h-full w-full max-w-5xl px-6 py-10 sm:px-10 sm:py-14">
       <div className="w-full space-y-6">
         <Card className="space-y-4">
-          <h1 className="text-3xl font-semibold">Profile</h1>
-          <p className="text-sm text-muted">Update your profile information and avatar.</p>
+          <p className="text-xs uppercase tracking-[0.18em] text-accent-strong">Account Settings</p>
+          <h1 className="text-4xl">Profile</h1>
+          <p className="text-sm text-muted">Update your identity card for training sessions and scoreboard exports.</p>
 
           {params.error && <p className="rounded-xl bg-rose-950/60 p-3 text-sm text-rose-200">{params.error}</p>}
           {params.success && <p className="rounded-xl bg-emerald-950/60 p-3 text-sm text-emerald-200">{params.success}</p>}
 
-          <form action={updateProfile} className="space-y-4">
+          <form action={updateProfile} className="space-y-4 md:max-w-xl">
             <div>
               <label htmlFor="email" className="mb-1 block text-sm text-muted">
                 Email
@@ -63,7 +64,8 @@ export default async function ProfilePage({ searchParams }: PageProps) {
         </Card>
 
         <Card className="space-y-4">
-          <h2 className="text-xl font-semibold">Avatar Upload</h2>
+          <h2 className="text-2xl">Avatar Upload</h2>
+          <p className="text-sm text-muted">Upload a square image to personalize your dashboard and tutor profile.</p>
           <AvatarUpload avatarUrl={safeProfile.avatar_url} />
         </Card>
       </div>

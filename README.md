@@ -66,12 +66,12 @@ Set these values in `.env.local` (or let `setup.sh` set them):
 
 ## Routes Included
 
-- `/` Home page with auth status + links
+- `/` Product landing page and learning flow overview
 - `/login` Email/password sign-in form
 - `/signup` Email/password sign-up form
-- `/dashboard` Protected route showing user/profile data
-- `/profile` Protected route for profile updates + avatar upload
-- `/tutor` Protected route for gated mastery flow and skip-check unlock logic
+- `/dashboard` Protected progress hub
+- `/profile` Protected profile and avatar settings
+- `/tutor` Protected gate-driven training route with skip-check persistence
 
 ## Authentication Pattern
 

@@ -15,7 +15,7 @@ export type HeaderNavConfig = {
 
 export const headerNavConfig: HeaderNavConfig = {
   brand: {
-    label: "Starter App",
+    label: "SCYTHE TUTOR",
     href: "/",
   },
   commonItems: [

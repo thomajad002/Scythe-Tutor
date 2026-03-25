@@ -18,45 +18,65 @@ export default async function DashboardPage() {
     .maybeSingle();
 
   return (
-    <main className="mx-auto flex min-h-full w-full max-w-3xl items-center px-6 py-16">
-      <Card className="w-full space-y-6">
-        <header className="space-y-1">
-          <h1 className="text-3xl font-semibold">Dashboard</h1>
-          <p className="text-sm text-muted">This route is protected. Unauthenticated users are redirected to login.</p>
+    <main className="mx-auto min-h-full w-full max-w-6xl px-6 py-10 sm:px-10 sm:py-14">
+      <Card className="space-y-6">
+        <header className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-accent-strong">Command Board</p>
+            <h1 className="mt-2 text-4xl">Training Dashboard</h1>
+            <p className="mt-2 text-sm text-muted">Track account details and jump directly into scoring drills.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/tutor">
+              <Button>Open Tutor</Button>
+            </Link>
+            <Link href="/profile">
+              <Button variant="secondary">Edit Profile</Button>
+            </Link>
+            <form action={signOut}>
+              <Button type="submit" variant="danger">Sign Out</Button>
+            </form>
+          </div>
         </header>
 
-        <div className="rounded-xl border border-border bg-surface-2 p-4 text-sm">
-          <div className="mb-3">
-            {profile?.avatar_url ? (
-              <Image
-                src={profile.avatar_url}
-                alt="Profile avatar"
-                width={64}
-                height={64}
-                unoptimized
-                className="h-16 w-16 rounded-full border border-border object-cover"
-              />
-            ) : (
-              <div className="flex h-16 w-16 items-center justify-center rounded-full border border-border bg-surface text-xs text-muted">
-                No avatar
+        <section className="grid gap-4 md:grid-cols-[1.2fr_1fr]">
+          <Card className="bg-surface-2/70">
+            <h2 className="text-xl">Pilot Profile</h2>
+            <div className="mt-4 flex items-center gap-4">
+              {profile?.avatar_url ? (
+                <Image
+                  src={profile.avatar_url}
+                  alt="Profile avatar"
+                  width={68}
+                  height={68}
+                  unoptimized
+                  className="h-[68px] w-[68px] rounded-full border border-border object-cover"
+                />
+              ) : (
+                <div className="flex h-[68px] w-[68px] items-center justify-center rounded-full border border-border bg-surface text-xs text-muted">
+                  No avatar
+                </div>
+              )}
+              <div className="space-y-1 text-sm">
+                <p><span className="text-muted">Email:</span> {user.email}</p>
+                <p><span className="text-muted">Name:</span> {profile?.full_name ?? "Not set"}</p>
+                <p><span className="text-muted">Updated:</span> {formatIsoDate(profile?.updated_at)}</p>
               </div>
-            )}
-          </div>
-          <p><span className="text-muted">Email:</span> {user.email}</p>
-          <p><span className="text-muted">Full Name:</span> {profile?.full_name ?? "Not set"}</p>
-          <p><span className="text-muted">Last Updated:</span> {formatIsoDate(profile?.updated_at)}</p>
-        </div>
+            </div>
+          </Card>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <Link href="/profile">
-            <Button variant="secondary">Go to Profile</Button>
-          </Link>
-          <form action={signOut}>
-            <Button type="submit" variant="danger">
-              Sign Out
-            </Button>
-          </form>
-        </div>
+          <Card className="bg-surface-2/70">
+            <h2 className="text-xl">Recommended Next Step</h2>
+            <p className="mt-2 text-sm text-muted">
+              Resume subtype mastery in tutor mode, then validate with single-player and multiplayer rounds.
+            </p>
+            <div className="mt-4">
+              <Link href="/tutor">
+                <Button fullWidth>Resume Tutor Flow</Button>
+              </Link>
+            </div>
+          </Card>
+        </section>
       </Card>
     </main>
   );

@@ -12,10 +12,11 @@ export default async function LoginPage({ searchParams }: PageProps) {
   const params = await searchParams;
 
   return (
-    <main className="mx-auto flex min-h-full w-full max-w-md items-center px-6 py-16">
-      <Card className="w-full">
-        <h1 className="text-2xl font-semibold">Login</h1>
-        <p className="mt-2 text-sm text-muted">Sign in with your email and password.</p>
+    <main className="mx-auto min-h-full w-full max-w-md px-6 py-10 sm:py-14">
+      <Card className="w-full space-y-2">
+        <p className="text-xs uppercase tracking-[0.18em] text-accent-strong">Welcome Back</p>
+        <h1 className="text-3xl">Continue Your Scoring Training</h1>
+        <p className="mt-2 text-sm text-muted">Sign in to resume gated mastery and speed challenge progress.</p>
 
         {params.error && <p className="mt-4 rounded-xl bg-rose-950/60 p-3 text-sm text-rose-200">{params.error}</p>}
 

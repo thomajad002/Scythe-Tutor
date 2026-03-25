@@ -12,10 +12,11 @@ export default async function SignupPage({ searchParams }: PageProps) {
   const params = await searchParams;
 
   return (
-    <main className="mx-auto flex min-h-full w-full max-w-md items-center px-6 py-16">
-      <Card className="w-full">
-        <h1 className="text-2xl font-semibold">Sign Up</h1>
-        <p className="mt-2 text-sm text-muted">Create an account to access protected routes.</p>
+    <main className="mx-auto min-h-full w-full max-w-md px-6 py-10 sm:py-14">
+      <Card className="w-full space-y-2">
+        <p className="text-xs uppercase tracking-[0.18em] text-accent-strong">New Trainee</p>
+        <h1 className="text-3xl">Create Your Tutor Profile</h1>
+        <p className="mt-2 text-sm text-muted">Set up an account and start practicing Scythe scoring immediately.</p>
 
         {params.error && <p className="mt-4 rounded-xl bg-rose-950/60 p-3 text-sm text-rose-200">{params.error}</p>}
 

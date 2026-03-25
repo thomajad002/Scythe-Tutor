@@ -1,16 +1,16 @@
 @import "tailwindcss";
 
 :root {
-  --background: #090b0f;
-  --foreground: #e7ebf5;
-  --surface-1: #11141b;
-  --surface-2: #171b24;
-  --surface-3: #202634;
-  --navy: #16213a;
-  --accent: #3b82f6;
-  --accent-strong: #60a5fa;
-  --muted: #aab4c8;
-  --border: #2a3242;
+  --background: #0d1412;
+  --foreground: #ece6d8;
+  --surface-1: #14201d;
+  --surface-2: #1d2b27;
+  --surface-3: #263632;
+  --navy: #111a18;
+  --accent: #b9975b;
+  --accent-strong: #e1bf84;
+  --muted: #aeb3a4;
+  --border: #3a4943;
 }
 
 @theme inline {
@@ -24,18 +24,67 @@
   --color-accent-strong: var(--accent-strong);
   --color-muted: var(--muted);
   --color-border: var(--border);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-plex-sans);
+  --font-mono: var(--font-plex-mono);
 }
 
 body {
-  background: var(--background);
+  background: radial-gradient(circle at 20% -10%, #32443d 0%, transparent 45%),
+    radial-gradient(circle at 100% 0%, #3f2d1f 0%, transparent 40%),
+    var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), system-ui, "Segoe UI", sans-serif;
+  font-family: var(--font-plex-sans), "Trebuchet MS", sans-serif;
 }
 
 html,
 body {
   height: 100%;
   overflow: hidden;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-cinzel), Georgia, serif;
+  letter-spacing: 0.015em;
+}
+
+.app-shell {
+  position: relative;
+}
+
+.app-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 32px 32px;
+  opacity: 0.15;
+}
+
+.atmosphere-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at 15% 25%, rgba(225, 191, 132, 0.16), transparent 38%),
+    radial-gradient(circle at 84% 78%, rgba(86, 114, 93, 0.3), transparent 42%);
+}
+
+.reveal-up {
+  animation: reveal-up 0.45s ease-out both;
+}
+
+@keyframes reveal-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
