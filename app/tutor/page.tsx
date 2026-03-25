@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth/server";
@@ -24,6 +25,29 @@ type TutorPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 
+type StageId = "subtype" | "skip-check" | "single-player" | "multiplayer" | "speed";
+
+const STAGE_LABELS: Record<StageId, string> = {
+  subtype: "1. Subtype Mastery",
+  "skip-check": "Skip Check",
+  "single-player": "2. Single Player",
+  multiplayer: "3. Multiplayer",
+  speed: "4. Speed Challenge",
+};
+
+function parseStage(value: string | null): StageId | null {
+  if (!value) {
+    return null;
+  }
+
+  const stage = value as StageId;
+  if (!(stage in STAGE_LABELS)) {
+    return null;
+  }
+
+  return stage;
+}
+
 function readParam(value: string | string[] | undefined): string | null {
   if (!value) {
     return null;
@@ -32,16 +56,69 @@ function readParam(value: string | string[] | undefined): string | null {
   return Array.isArray(value) ? value[0] ?? null : value;
 }
 
+function stageAllowed(
+  stage: StageId,
+  progress: Awaited<ReturnType<typeof getTutorProgressState>>,
+  masteredAllSubtypes: boolean,
+): boolean {
+  switch (stage) {
+    case "subtype":
+      return !progress.skipCheckPassed;
+    case "skip-check":
+      return !progress.tutorialCompleted;
+    case "single-player":
+      return progress.skipCheckPassed || masteredAllSubtypes;
+    case "multiplayer":
+      return progress.skipCheckPassed || progress.singlePlayerMastered;
+    case "speed":
+      return progress.speedChallengeUnlocked;
+    default:
+      return false;
+  }
+}
+
+function getDefaultStage(
+  progress: Awaited<ReturnType<typeof getTutorProgressState>>,
+  masteredAllSubtypes: boolean,
+): StageId {
+  if (progress.speedChallengeUnlocked) {
+    return "speed";
+  }
+
+  if (!progress.skipCheckPassed && !masteredAllSubtypes) {
+    return "subtype";
+  }
+
+  if (progress.skipCheckPassed || !progress.singlePlayerMastered) {
+    return progress.skipCheckPassed ? "multiplayer" : "single-player";
+  }
+
+  if (progress.maxMultiplayerUnlocked < 5) {
+    return "multiplayer";
+  }
+
+  return "speed";
+}
+
 export default async function TutorPage({ searchParams }: TutorPageProps) {
   const user = await requireUser();
   const params = searchParams ? await searchParams : {};
   const successMessage = readParam(params.success);
   const errorMessage = readParam(params.error);
+  const requestedStage = parseStage(readParam(params.stage));
 
   const progress = await getTutorProgressState(user.id);
   const masteredAllSubtypes = allSubtypesMastered(progress.subtypeMastery);
+  const defaultStage = getDefaultStage(progress, masteredAllSubtypes);
+  const activeStage = requestedStage && stageAllowed(requestedStage, progress, masteredAllSubtypes)
+    ? requestedStage
+    : defaultStage;
+
+  const masteredCount = SUBTYPE_IDS.filter((subtypeId) => progress.subtypeMastery[subtypeId]).length;
+  const nextSubtype = SUBTYPE_IDS.find((subtypeId) => !progress.subtypeMastery[subtypeId]) ?? SUBTYPE_IDS[0];
   const singlePlayerUnlocked = progress.skipCheckPassed || masteredAllSubtypes;
   const multiplayerUnlocked = progress.skipCheckPassed || progress.singlePlayerMastered;
+  const activeMultiplayerTarget = Math.max(2, Math.min(5, progress.maxMultiplayerUnlocked));
 
   return (
     <main className="mx-auto min-h-full w-full max-w-6xl px-6 py-10 sm:px-10 sm:py-12">
@@ -54,10 +131,23 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
             Gate order is enforced in this MVP: subtypes -&gt; single-player -&gt; multiplayer 2-5 -&gt; speed challenge.
             Perfect skip-check can unlock immediately.
           </p>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs text-muted">
+              <span>Subtype Mastery Progress</span>
+              <span>{masteredCount}/{SUBTYPE_IDS.length}</span>
+            </div>
+            <div className="h-2 w-full rounded-full bg-surface-3">
+              <div
+                className="h-2 rounded-full bg-accent transition-all"
+                style={{ width: `${(masteredCount / SUBTYPE_IDS.length) * 100}%` }}
+              />
+            </div>
+          </div>
+
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-xl border border-border bg-surface-2 p-3 text-sm">
               <p className="text-muted">Subtypes mastered</p>
-              <p className="font-semibold">{masteredAllSubtypes ? "Complete" : "In progress"}</p>
+              <p className="font-semibold">{masteredAllSubtypes ? "Complete" : `${masteredCount} complete`}</p>
             </div>
             <div className="rounded-xl border border-border bg-surface-2 p-3 text-sm">
               <p className="text-muted">Single-player</p>
@@ -84,172 +174,179 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
           ) : null}
         </Card>
 
-        <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
-          <Card className="space-y-3">
-          <h2 className="text-xl font-semibold">Skip Check (Tutorial Bypass)</h2>
-          <p className="text-sm text-muted">
-            Submit one full-game assessment result. Perfect score unlocks tutorial completion and speed challenge.
-          </p>
-          <form action={submitSkipCheckAssessment} className="grid gap-3 sm:grid-cols-3">
-            <label className="text-sm text-muted">
-              Total players
-              <input
-                className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-foreground"
-                type="number"
-                name="total_players"
-                min={1}
-                max={7}
-                defaultValue={5}
-              />
-            </label>
-            <label className="text-sm text-muted">
-              Correct players
-              <input
-                className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-foreground"
-                type="number"
-                name="correct_players"
-                min={0}
-                max={7}
-                defaultValue={0}
-              />
-            </label>
-            <div className="flex items-end">
-              <Button type="submit" fullWidth>
-                Submit Skip Check
-              </Button>
-            </div>
-          </form>
-          </Card>
+        <Card className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            {(Object.keys(STAGE_LABELS) as StageId[]).map((stage) => {
+              const allowed = stageAllowed(stage, progress, masteredAllSubtypes);
+              const active = activeStage === stage;
 
-          <Card className="space-y-3">
-          <h2 className="text-xl font-semibold">Subtype Mastery</h2>
-          <p className="text-sm text-muted">
-            Record subtype practice outcomes. Mastery rule: 2 consecutive first-try correct or 80% in last 5.
-          </p>
-          <ul className="grid gap-2 sm:grid-cols-2">
-            {SUBTYPE_IDS.map((subtypeId) => (
-              <li key={subtypeId} className="rounded-lg border border-border bg-surface-2 p-3 text-sm">
-                <span className="text-muted">{SUBTYPE_LABELS[subtypeId]}:</span>{" "}
-                <span className="font-medium">{progress.subtypeMastery[subtypeId] ? "Mastered" : "Not mastered"}</span>
-              </li>
-            ))}
-          </ul>
+              return (
+                <Link
+                  key={stage}
+                  href={`/tutor?stage=${encodeURIComponent(stage)}`}
+                  aria-disabled={!allowed}
+                  className={`rounded-lg border px-3 py-2 text-xs tracking-[0.04em] ${
+                    active
+                      ? "border-accent bg-accent text-[#201407]"
+                      : allowed
+                        ? "border-border bg-surface-2 text-foreground"
+                        : "cursor-not-allowed border-border/40 bg-surface-2/40 text-muted"
+                  }`}
+                >
+                  {STAGE_LABELS[stage]}
+                </Link>
+              );
+            })}
+          </div>
 
-          <form action={recordSubtypePractice} className="grid gap-3 md:grid-cols-3">
-            <label className="text-sm text-muted">
-              Subtype
-              <select
-                name="subtype_id"
-                className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-foreground"
-                defaultValue={SUBTYPE_IDS[0]}
-              >
+          {activeStage === "subtype" ? (
+            <div className="space-y-4">
+              <h2 className="text-2xl">Walkthrough: Subtype Mastery</h2>
+              <p className="text-sm text-muted">
+                Focus only on one subtype at a time. Current target: <span className="text-foreground">{SUBTYPE_LABELS[nextSubtype]}</span>
+              </p>
+
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {SUBTYPE_IDS.map((subtypeId) => (
-                  <option key={subtypeId} value={subtypeId}>
-                    {SUBTYPE_LABELS[subtypeId]}
-                  </option>
+                  <div key={subtypeId} className="rounded-lg border border-border bg-surface-2 p-3 text-sm">
+                    <p className="text-muted">{SUBTYPE_LABELS[subtypeId]}</p>
+                    <p className={`mt-1 font-medium ${progress.subtypeMastery[subtypeId] ? "text-emerald-300" : "text-amber-200"}`}>
+                      {progress.subtypeMastery[subtypeId] ? "Mastered" : "In progress"}
+                    </p>
+                  </div>
                 ))}
-              </select>
-            </label>
+              </div>
 
-            <label className="text-sm text-muted">
-              Result
-              <select
-                name="is_correct"
-                className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-foreground"
-                defaultValue="true"
-              >
-                <option value="true">Correct</option>
-                <option value="false">Incorrect</option>
-              </select>
-            </label>
-
-            <label className="text-sm text-muted">
-              First try
-              <select
-                name="first_try_correct"
-                className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-foreground"
-                defaultValue="true"
-              >
-                <option value="true">Yes</option>
-                <option value="false">No</option>
-              </select>
-            </label>
-            <div className="md:col-span-3">
-              <Button type="submit">Record Subtype Attempt</Button>
-            </div>
-          </form>
-          </Card>
-        </div>
-
-        <div className="grid gap-6 lg:grid-cols-2">
-          <Card className="space-y-3">
-          <h2 className="text-xl font-semibold">Single-Player Gate</h2>
-          <p className="text-sm text-muted">
-            Locked until all subtypes are mastered (unless skip check passed). Requires 2 consecutive correct rounds.
-          </p>
-          {singlePlayerUnlocked ? (
-            <div className="flex flex-wrap gap-3">
-              <form action={recordSinglePlayerAttempt}>
-                <input type="hidden" name="is_correct" value="true" />
-                <Button type="submit">Record Correct Single-Player Round</Button>
-              </form>
-              <form action={recordSinglePlayerAttempt}>
-                <input type="hidden" name="is_correct" value="false" />
-                <Button type="submit" variant="secondary">
-                  Record Incorrect Single-Player Round
-                </Button>
-              </form>
-              <p className="text-sm text-muted">
-                Current consecutive correct: {progress.singlePlayerConsecutiveCorrect}
-              </p>
-            </div>
-          ) : (
-            <p className="rounded-lg border border-border bg-surface-2 p-3 text-sm text-muted">
-              Complete subtype mastery first to unlock single-player stage.
-            </p>
-          )}
-          </Card>
-
-          <Card className="space-y-3">
-          <h2 className="text-xl font-semibold">Multiplayer Gate (2-5 Players)</h2>
-          <p className="text-sm text-muted">
-            Locked until single-player mastery. Correct result at current max unlocks the next player count.
-          </p>
-          {multiplayerUnlocked ? (
-            <div className="space-y-3">
-              <p className="text-sm text-muted">
-                Current unlocked player count: <span className="font-semibold text-foreground">{progress.maxMultiplayerUnlocked}</span>
-              </p>
               <div className="flex flex-wrap gap-3">
-                <form action={recordMultiplayerAttempt}>
+                <form action={recordSubtypePractice}>
+                  <input type="hidden" name="subtype_id" value={nextSubtype} />
                   <input type="hidden" name="is_correct" value="true" />
-                  <input
-                    type="hidden"
-                    name="player_count"
-                    value={String(Math.max(2, progress.maxMultiplayerUnlocked))}
-                  />
-                  <Button type="submit">Record Correct Multiplayer Round</Button>
+                  <input type="hidden" name="first_try_correct" value="true" />
+                  <Button type="submit">Correct On First Try</Button>
                 </form>
-                <form action={recordMultiplayerAttempt}>
+                <form action={recordSubtypePractice}>
+                  <input type="hidden" name="subtype_id" value={nextSubtype} />
+                  <input type="hidden" name="is_correct" value="true" />
+                  <input type="hidden" name="first_try_correct" value="false" />
+                  <Button type="submit" variant="secondary">Correct After Hint</Button>
+                </form>
+                <form action={recordSubtypePractice}>
+                  <input type="hidden" name="subtype_id" value={nextSubtype} />
                   <input type="hidden" name="is_correct" value="false" />
-                  <input
-                    type="hidden"
-                    name="player_count"
-                    value={String(Math.max(2, progress.maxMultiplayerUnlocked))}
-                  />
-                  <Button type="submit" variant="secondary">
-                    Record Incorrect Multiplayer Round
-                  </Button>
+                  <input type="hidden" name="first_try_correct" value="false" />
+                  <Button type="submit" variant="danger">Incorrect Attempt</Button>
                 </form>
               </div>
+
+              <Link href="/tutor?stage=skip-check" className="text-sm text-accent-strong hover:underline">
+                Prefer to bypass tutorial? Try skip-check assessment.
+              </Link>
             </div>
-          ) : (
-            <p className="rounded-lg border border-border bg-surface-2 p-3 text-sm text-muted">
-              Complete single-player gate first to unlock multiplayer progression.
-            </p>
-          )}
-          </Card>
-        </div>
+          ) : null}
+
+          {activeStage === "skip-check" ? (
+            <div className="space-y-4">
+              <h2 className="text-2xl">Walkthrough: Skip Check</h2>
+              <p className="text-sm text-muted">
+                Submit one full-game scoring assessment. Perfect means immediate tutorial completion and speed unlock.
+              </p>
+              <form action={submitSkipCheckAssessment} className="grid gap-3 sm:grid-cols-3">
+                <label className="text-sm text-muted">
+                  Total players
+                  <input
+                    className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-foreground"
+                    type="number"
+                    name="total_players"
+                    min={1}
+                    max={7}
+                    defaultValue={5}
+                  />
+                </label>
+                <label className="text-sm text-muted">
+                  Correct players
+                  <input
+                    className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-foreground"
+                    type="number"
+                    name="correct_players"
+                    min={0}
+                    max={7}
+                    defaultValue={0}
+                  />
+                </label>
+                <div className="flex items-end">
+                  <Button type="submit" fullWidth>Submit Skip Check</Button>
+                </div>
+              </form>
+            </div>
+          ) : null}
+
+          {activeStage === "single-player" ? (
+            <div className="space-y-4">
+              <h2 className="text-2xl">Walkthrough: Single-Player Gate</h2>
+              <p className="text-sm text-muted">
+                Require 2 consecutive correct full-score calculations before multiplayer unlocks.
+              </p>
+              {singlePlayerUnlocked ? (
+                <div className="space-y-3">
+                  <p className="text-sm text-muted">Consecutive correct: {progress.singlePlayerConsecutiveCorrect}</p>
+                  <div className="flex flex-wrap gap-3">
+                    <form action={recordSinglePlayerAttempt}>
+                      <input type="hidden" name="is_correct" value="true" />
+                      <Button type="submit">Record Correct Round</Button>
+                    </form>
+                    <form action={recordSinglePlayerAttempt}>
+                      <input type="hidden" name="is_correct" value="false" />
+                      <Button type="submit" variant="secondary">Record Incorrect Round</Button>
+                    </form>
+                  </div>
+                </div>
+              ) : (
+                <p className="rounded-lg border border-border bg-surface-2 p-3 text-sm text-muted">
+                  Locked until subtype mastery is complete.
+                </p>
+              )}
+            </div>
+          ) : null}
+
+          {activeStage === "multiplayer" ? (
+            <div className="space-y-4">
+              <h2 className="text-2xl">Walkthrough: Multiplayer Gate</h2>
+              <p className="text-sm text-muted">
+                Current stage focuses on <span className="text-foreground">{activeMultiplayerTarget} players</span>. A correct round unlocks the next player count.
+              </p>
+              {multiplayerUnlocked ? (
+                <div className="flex flex-wrap gap-3">
+                  <form action={recordMultiplayerAttempt}>
+                    <input type="hidden" name="is_correct" value="true" />
+                    <input type="hidden" name="player_count" value={String(activeMultiplayerTarget)} />
+                    <Button type="submit">Record Correct {activeMultiplayerTarget}-Player Round</Button>
+                  </form>
+                  <form action={recordMultiplayerAttempt}>
+                    <input type="hidden" name="is_correct" value="false" />
+                    <input type="hidden" name="player_count" value={String(activeMultiplayerTarget)} />
+                    <Button type="submit" variant="secondary">Record Incorrect Round</Button>
+                  </form>
+                </div>
+              ) : (
+                <p className="rounded-lg border border-border bg-surface-2 p-3 text-sm text-muted">
+                  Locked until single-player gate is mastered.
+                </p>
+              )}
+            </div>
+          ) : null}
+
+          {activeStage === "speed" ? (
+            <div className="space-y-4">
+              <h2 className="text-2xl">Speed Challenge Unlocked</h2>
+              <p className="text-sm text-muted">
+                You have cleared all required gates. Next implementation step is timed full-game rounds with countdown and scoring latency tracking.
+              </p>
+              <p className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm text-emerald-200">
+                Ready state reached. Build timed challenge interactions next.
+              </p>
+            </div>
+          ) : null}
+        </Card>
       </div>
     </main>
   );

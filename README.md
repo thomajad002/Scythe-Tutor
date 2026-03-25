@@ -20,6 +20,8 @@ Completed in current milestone:
 - Added skip-check assessment flow and persistence
 - Added progression persistence (`tutor_progress`, `subtype_attempt_events`, `skip_check_attempts`)
 - Added tutor progression logic module (`lib/tutor/progression.ts`) and tests
+- Redesigned tutor UI as a one-stage-at-a-time walkthrough with adaptive stage routing
+- Added asset checklist and folder conventions (`assets.md`, `public/assets/`)
 
 Starter foundation retained:
 
@@ -137,6 +139,17 @@ These tables provide the core data model for the inner tutoring loop: scenario s
 
 Skip-check can bypass tutorial gates only if the full assessment is perfect.
 
+### Walkthrough UX Model
+
+`/tutor` now emphasizes one active stage at a time:
+
+- Subtype walkthrough (inner loop)
+- Single-player gate
+- Multiplayer gate (outer loop progression from 2 to 5 players)
+- Speed challenge unlock state
+
+This reduces cognitive load and keeps progression visually explicit.
+
 ## Scoring Engine
 
 Core rule-based scoring and constraint evaluation live in [lib/scythe/scoring.ts](lib/scythe/scoring.ts).
@@ -183,6 +196,7 @@ Server Actions request size is configured to `10mb`, and app-level avatar valida
 - [hooks](hooks): reusable React hooks
 - [types](types): shared TypeScript database types
 - [tests](tests): unit tests
+- [assets.md](assets.md): asset planning checklist and naming conventions
 
 ## Theme + Styling
 
