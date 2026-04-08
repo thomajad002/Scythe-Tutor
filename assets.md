@@ -21,6 +21,18 @@ Put all assets under `public/assets/` using these folders:
 - `public/assets/ui/`
 - `public/assets/audio/`
 
+## Board Data Location
+Put all board configuration and ruleset JSON files in:
+- `data/boards/` — board layouts, scoring rules, faction configs, scenario data
+
+## Current Name Family Mapping
+If you are importing the existing underscore-style files, place them by these prefixes:
+- `Scythe_Board.*` -> `public/assets/boards/`
+- `<color>_<piece>.*` (for example `black_mech`, `blue_star`, `red_player`) -> `public/assets/tokens/factions/<color>/`
+- `Grain.*`, `Lumber.*`, `Oil.*`, `Ore.*` -> `public/assets/tokens/resources/`
+- `<value>_<side>.*` (for example `one_front`, `five_back`, `twenty_front`) -> `public/assets/tokens/coins/`
+- `sb_*.*` structure bonus tiles -> `public/assets/tokens/structure-bonus/`
+
 ## Tutor Walkthrough Assets
 - [ ] Tutorial hero banner art
   - Suggested name: `public/assets/ui/tutorial-hero-v1.webp`

@@ -9,7 +9,9 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "setup": "bash ./setup.sh"
+    "setup": "bash ./setup.sh",
+    "assets:organize": "node scripts/organize-assets.mjs",
+    "assets:organize:apply": "node scripts/organize-assets.mjs --apply"
   },
   "dependencies": {
     "@supabase/ssr": "^0.8.0",
