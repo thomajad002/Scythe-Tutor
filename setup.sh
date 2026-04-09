@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "🚀 Setting up Next.js + Supabase Starter App..."
+echo "🚀 Setting up Scythe Tutor..."
 
 if ! command -v npm >/dev/null 2>&1; then
   echo "❌ npm is required but not found. Install Node.js first."

@@ -7,15 +7,15 @@
 - [x] Implement deterministic Scythe scoring engine (stars, territories, resources, coins, popularity multipliers).
 - [x] Implement constraint-based rule checks.
 - [x] Implement error classification for common mistakes.
-- [ ] Implement layered hints (L1/L2/L3).
+- [x] Implement layered hints (L1/L2/L3).
 - [x] Build authenticated `/tutor` step-by-step practice flow.
 - [x] Persist learner responses and feedback events.
-- [ ] Build final attempt summary with score decomposition.
-- [ ] Build mastery/progress visualization by knowledge component.
+- [x] Build final attempt summary with score decomposition.
+- [x] Build mastery/progress visualization by knowledge component.
 - [x] Add test coverage for engine + classifier + tutor actions.
-- [ ] Add structure bonus tile scoring support.
-- [ ] Add winner tiebreaker walkthrough logic.
-- [ ] Add Factory as 3 territories rule handling.
+- [x] Add structure bonus tile scoring support.
+- [x] Add winner tiebreaker walkthrough logic.
+- [x] Add Factory as 3 territories rule handling.
 - [x] Add tutorial bypass assessment and unlock logic.
 - [x] Implement progression gates: subtype -> single-player -> 2-5 players.
 

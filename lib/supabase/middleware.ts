@@ -29,7 +29,13 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  await supabase.auth.getUser();
+  try {
+    await supabase.auth.getUser();
+  } catch {
+    // Local dev fallback: if Supabase is unreachable (e.g., Docker not running),
+    // continue request handling without refreshing the auth session.
+    return NextResponse.next({ request });
+  }
 
   return supabaseResponse;
 }

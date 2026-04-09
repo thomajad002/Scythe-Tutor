@@ -42,7 +42,7 @@ export default async function RootLayout({
       <body
         className={`${plexSans.variable} ${plexMono.variable} ${cinzel.variable} h-full overflow-hidden antialiased`}
       >
-        <div className="app-shell h-full bg-background text-foreground">
+        <div className="app-shell flex h-full min-h-dvh flex-col overflow-hidden bg-background text-foreground">
           <div className="atmosphere-layer" />
           <div className="fixed inset-x-0 top-0 z-50">
             <AppHeader
@@ -51,9 +51,9 @@ export default async function RootLayout({
               navItems={navItems}
             />
           </div>
-          <main className="fixed inset-x-0 bottom-0 top-20 overflow-y-auto overscroll-contain px-1">
+          <div className="flex-1 overflow-y-auto overflow-x-clip px-1 pt-20">
             {children}
-          </main>
+          </div>
         </div>
       </body>
     </html>

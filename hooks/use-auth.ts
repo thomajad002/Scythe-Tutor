@@ -18,9 +18,13 @@ export function useAuth(): UseAuthState {
   useEffect(() => {
     const supabase = createClient();
 
-    supabase.auth.getUser().then(({ data }) => {
-      setState({ user: data.user ?? null, loading: false });
-    });
+    supabase.auth.getUser()
+      .then(({ data }) => {
+        setState({ user: data.user ?? null, loading: false });
+      })
+      .catch(() => {
+        setState({ user: null, loading: false });
+      });
 
     const {
       data: { subscription },

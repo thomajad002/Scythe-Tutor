@@ -1,7 +1,11 @@
 import {
   evaluateBreakdownAttempt,
+  evaluateFullBreakdownAttempt,
+  getLayeredHints,
   getPopularityTier,
   scoreScenario,
+  scoreFullScenario,
+  scoreMultiplayerRound,
   type ScoringScenarioInput,
 } from "@/lib/scythe/scoring";
 import { describe, expect, it } from "vitest";
@@ -128,5 +132,118 @@ describe("evaluateBreakdownAttempt", () => {
     });
 
     expect(evaluation.errors.some((error) => error.code === "arithmetic_sum_error")).toBe(true);
+  });
+});
+
+describe("scoreFullScenario", () => {
+  it("applies factory and structure bonus correctly", () => {
+    const result = scoreFullScenario({
+      stars: 4,
+      territories: 6,
+      resources: 10,
+      coins: 8,
+      popularity: 11,
+      factoryControlled: true,
+      structureBonusCoins: 6,
+    });
+
+    expect(result.points).toEqual({
+      stars: 16,
+      territories: 24,
+      resources: 10,
+      coins: 8,
+      structureBonus: 6,
+      total: 64,
+    });
+  });
+});
+
+describe("evaluateFullBreakdownAttempt", () => {
+  it("flags missing factory territory adjustment", () => {
+    const evaluation = evaluateFullBreakdownAttempt(
+      {
+        stars: 2,
+        territories: 5,
+        resources: 8,
+        coins: 10,
+        popularity: 9,
+        factoryControlled: true,
+        structureBonusCoins: 4,
+      },
+      {
+        stars: 8,
+        territories: 15,
+        resources: 8,
+        coins: 10,
+        structureBonus: 4,
+        total: 45,
+      },
+    );
+
+    expect(evaluation.isFullyCorrect).toBe(false);
+    expect(evaluation.errors.some((error) => error.field === "territories")).toBe(true);
+  });
+});
+
+describe("scoreMultiplayerRound", () => {
+  it("uses tiebreakers when totals are tied", () => {
+    const round = scoreMultiplayerRound([
+      {
+        playerId: "p1",
+        stars: 3,
+        territories: 6,
+        resources: 8,
+        coins: 9,
+        popularity: 10,
+        structureBonusCoins: 0,
+        factoryControlled: false,
+        tiebreaker: {
+          unitsAndStructures: 12,
+          power: 7,
+          popularity: 10,
+          resources: 8,
+          territories: 6,
+          stars: 3,
+        },
+      },
+      {
+        playerId: "p2",
+        stars: 3,
+        territories: 6,
+        resources: 8,
+        coins: 9,
+        popularity: 10,
+        structureBonusCoins: 0,
+        factoryControlled: false,
+        tiebreaker: {
+          unitsAndStructures: 14,
+          power: 6,
+          popularity: 10,
+          resources: 8,
+          territories: 6,
+          stars: 3,
+        },
+      },
+    ]);
+
+    expect(round.winnerPlayerId).toBe("p2");
+    expect(round.tiebreakReason).toBe("unitsAndStructures");
+  });
+});
+
+describe("getLayeredHints", () => {
+  it("returns deterministic hints for a level", () => {
+    const hints = getLayeredHints(
+      [
+        {
+          field: "resources",
+          code: "miscounted_resources",
+          message: "x",
+        },
+      ],
+      2,
+    );
+
+    expect(hints).toEqual(["Compute resource pairs with floor(resources / 2) before multiplying."]);
   });
 });

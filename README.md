@@ -22,6 +22,10 @@ Completed in current milestone:
 - Added tutor progression logic module (`lib/tutor/progression.ts`) and tests
 - Redesigned tutor UI as a one-stage-at-a-time walkthrough with adaptive stage routing
 - Added asset checklist and folder conventions (`assets.md`, `public/assets/`)
+- Replaced manual gate toggles with real scoring submission forms for single-player and multiplayer stages
+- Added temporary board-state scenario sourcing with deterministic scenario bank selection for tutor rounds
+- Implemented layered hint levels (L1/L2/L3), decomposition summaries, and winner/tiebreaker evaluation
+- Extended scoring engine to include Factory territory handling (+2 territory equivalent when controlled) and structure bonus coins
 
 Starter foundation retained:
 

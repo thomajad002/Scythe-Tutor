@@ -23,7 +23,7 @@ export function AppHeader({ brandLabel, brandHref, navItems }: AppHeaderProps) {
   const pathname = usePathname();
 
   return (
-    <header className="border-b border-border/70 bg-navy/95 backdrop-blur-sm">
+    <header className="w-full border-b border-border/70 bg-navy/95 backdrop-blur-sm">
       <div className="mx-auto flex h-20 w-full max-w-7xl items-center px-6 sm:px-10">
         <Link href={brandHref} className="font-serif text-xl font-bold tracking-[0.1em] text-accent-strong sm:text-2xl">
           {brandLabel}
