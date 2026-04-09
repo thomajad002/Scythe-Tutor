@@ -59,7 +59,7 @@ export function BoardMap({
         />
 
         {piecePlacements.map((piece) => {
-          const size = PIECE_SIZE_PERCENT[piece.kind];
+          const size = piece.sizePercent ?? PIECE_SIZE_PERCENT[piece.kind];
           const zIndex = PIECE_Z_INDEX[piece.kind];
           const rotationDeg = piece.rotationDeg ?? 0;
 
@@ -79,6 +79,7 @@ export function BoardMap({
                 src={piece.tokenPath}
                 alt={`${piece.playerId} ${piece.kind}`}
                 className="block h-auto w-full select-none object-contain"
+                style={{ filter: "saturate(1.14) contrast(1.05) brightness(1.04)" }}
               />
               {piece.stackCount && piece.stackCount > 1 ? (
                 <span className="absolute -right-2 -top-2 inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-white/80 bg-white px-1 text-[10px] font-bold leading-none text-black shadow-sm">

@@ -27,6 +27,7 @@ export type PiecePlacement = {
   tokenPath: string;
   x: number;
   y: number;
+  sizePercent?: number;
   stackCount?: number;
   rotationDeg?: number;
 };
@@ -383,12 +384,15 @@ function buildPiecePlacements(
   players: TemporaryScenarioPlayer[],
   hexById: Map<number, { points: HexPoint[] }>,
   trackSlots: TrackSlots,
-  structureBonusMarker: { center: HexPoint; rotationDegrees?: number } | null,
+  structureBonusMarker: { center: HexPoint; width?: number; height?: number; rotationDegrees?: number } | null,
 ): PiecePlacement[] {
   const placements: PiecePlacement[] = [];
 
   const structureBonusPath = STRUCTURE_BONUS_TILE_PATHS[randomInt(rand, 0, STRUCTURE_BONUS_TILE_PATHS.length - 1)];
   const structureCenter = structureBonusMarker?.center ?? FALLBACK_STRUCTURE_BONUS_TILE_ANCHOR;
+  const structureBonusSize = structureBonusMarker?.width
+    ? Math.max(7.2, Math.min(9.8, structureBonusMarker.width * 100 * 0.92))
+    : 8.6;
   placements.push({
     id: "structure-bonus-tile",
     playerId: "board",
@@ -396,6 +400,7 @@ function buildPiecePlacements(
     tokenPath: structureBonusPath,
     x: structureCenter.x,
     y: structureCenter.y,
+    sizePercent: structureBonusSize,
     rotationDeg: structureBonusMarker?.rotationDegrees ?? randomInt(rand, -4, 4),
   });
 
@@ -645,6 +650,8 @@ export const getTemporaryScenarioBank = cache(async (): Promise<TemporaryScenari
         trackSlots,
         markers?.structureBonus ? {
           center: markers.structureBonus.center,
+          width: markers.structureBonus.width,
+          height: markers.structureBonus.height,
           rotationDegrees: markers.structureBonus.rotationDegrees,
         } : null,
       ),

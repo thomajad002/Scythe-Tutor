@@ -29,9 +29,7 @@
 }
 
 body {
-  background: radial-gradient(circle at 20% -10%, #32443d 0%, transparent 45%),
-    radial-gradient(circle at 100% 0%, #3f2d1f 0%, transparent 40%),
-    var(--background);
+  background: var(--background);
   color: var(--foreground);
   font-family: var(--font-plex-sans), "Trebuchet MS", sans-serif;
 }
@@ -59,11 +57,7 @@ h4 {
 }
 
 .atmosphere-layer {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: radial-gradient(circle at 15% 25%, rgba(225, 191, 132, 0.16), transparent 38%),
-    radial-gradient(circle at 84% 78%, rgba(86, 114, 93, 0.3), transparent 42%);
+  display: none;
 }
 
 .reveal-up {

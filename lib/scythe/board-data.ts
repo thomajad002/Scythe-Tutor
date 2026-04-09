@@ -29,6 +29,8 @@ export type ScytheBoardData = {
         x: number;
         y: number;
       };
+      width?: number;
+      height?: number;
       rotationDegrees?: number;
     };
     popularityTrack?: {

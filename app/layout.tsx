@@ -43,7 +43,6 @@ export default async function RootLayout({
         className={`${plexSans.variable} ${plexMono.variable} ${cinzel.variable} h-full overflow-hidden antialiased`}
       >
         <div className="app-shell flex h-full min-h-dvh flex-col overflow-hidden bg-background text-foreground">
-          <div className="atmosphere-layer" />
           <div className="fixed inset-x-0 top-0 z-50">
             <AppHeader
               brandLabel={headerNavConfig.brand.label}
