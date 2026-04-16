@@ -248,11 +248,6 @@ export function BoardMap({
                   }}
                 />
               </div>
-              {piece.stackCount && piece.stackCount > 1 ? (
-                <span className="absolute -right-2 -top-2 inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-white/80 bg-white px-1 text-[10px] font-bold leading-none text-black shadow-sm">
-                  {piece.stackCount}
-                </span>
-              ) : null}
             </div>
           );
         })}

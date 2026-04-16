@@ -17,6 +17,7 @@ type RawScenarioPlayer = {
   popularity: number;
   coinsInHand: number;
   controlledHexIds: number[];
+  soloControlledHexIds?: number[];
   characterHexId: number;
   mechHexIds: number[];
   workerHexIds: number[];
@@ -392,6 +393,14 @@ function countByHex(hexIds: number[]): Array<{ hexId: number; count: number }> {
   return Array.from(counts.entries()).map(([hexId, count]) => ({ hexId, count }));
 }
 
+function controlledHexIdsForPlayer(rawPlayer: RawScenarioPlayer, playerCount: number): number[] {
+  if (playerCount === 1 && rawPlayer.soloControlledHexIds && rawPlayer.soloControlledHexIds.length > 0) {
+    return rawPlayer.soloControlledHexIds;
+  }
+
+  return rawPlayer.controlledHexIds;
+}
+
 function toPlayerInput(rawPlayer: RawScenarioPlayer, scoring: RawScoringEntry, index: number): TemporaryScenarioPlayer {
   const stars = sumStars(rawPlayer.stars);
   return {
@@ -504,11 +513,19 @@ export const getScenarioBank = cache(async (): Promise<TemporaryScenario[]> => {
     const sorted = sortPlayersForTeaching(playersWithScoring.map((entry) => entry.converted));
 
     for (let playerCount = 1; playerCount <= Math.min(5, sorted.length); playerCount += 1) {
-      const selectedPlayers = sorted.slice(0, playerCount).map((player, index) => ({
-        ...player,
-        playerId: `p${index + 1}`,
-        displayName: `${player.faction} (${index + 1})`,
-      }));
+      const rawPlayersByFaction = new Map(playersWithScoring.map((entry) => [entry.rawPlayer.faction, entry.rawPlayer] as const));
+      const selectedPlayers = sorted.slice(0, playerCount).map((player, index) => {
+        const rawPlayer = rawPlayersByFaction.get(player.faction);
+        const controlledHexIds = rawPlayer ? controlledHexIdsForPlayer(rawPlayer, playerCount) : [];
+
+        return {
+          ...player,
+          playerId: `p${index + 1}`,
+          displayName: `${player.faction} (${index + 1})`,
+          territories: controlledHexIds.length,
+          factoryControlled: controlledHexIds.includes(FACTORY_HEX_ID),
+        };
+      });
 
       const selectedFactions = new Set(selectedPlayers.map((p) => p.faction));
       const selectedRawPlayers = playersWithScoring
@@ -559,24 +576,25 @@ export const getScenarioBank = cache(async (): Promise<TemporaryScenario[]> => {
           const points = hexPoints.get(stack.hexId);
           const box = hexBoxes.get(stack.hexId);
           if (!box || !points) continue;
-          const point = samplePointInPolygonAvoiding(
-            points,
-            `${raw.scenarioId}-${normalizedPlayer.playerId}-worker-${stack.hexId}`,
-            occupied,
-            boxOccupancyRadius(box.widthPercent, box.heightPercent),
-          );
-          placements.push({
-            id: `${raw.scenarioId}-${normalizedPlayer.playerId}-worker-${stack.hexId}`,
-            playerId: normalizedPlayer.playerId,
-            kind: "worker",
-            tokenPath: tokenPathForFactionPiece(rawPlayer.faction, "worker"),
-            x: point.x,
-            y: point.y,
-            stackCount: stack.count,
-            boxWidthPercent: box.widthPercent,
-            boxHeightPercent: box.heightPercent,
-          });
-          occupied.push({ point, radius: boxOccupancyRadius(box.widthPercent, box.heightPercent) });
+          for (let workerIndex = 0; workerIndex < stack.count; workerIndex += 1) {
+            const point = samplePointInPolygonAvoiding(
+              points,
+              `${raw.scenarioId}-${normalizedPlayer.playerId}-worker-${stack.hexId}-${workerIndex + 1}`,
+              occupied,
+              boxOccupancyRadius(box.widthPercent, box.heightPercent),
+            );
+            placements.push({
+              id: `${raw.scenarioId}-${normalizedPlayer.playerId}-worker-${stack.hexId}-${workerIndex + 1}`,
+              playerId: normalizedPlayer.playerId,
+              kind: "worker",
+              tokenPath: tokenPathForFactionPiece(rawPlayer.faction, "worker"),
+              x: point.x,
+              y: point.y,
+              boxWidthPercent: box.widthPercent,
+              boxHeightPercent: box.heightPercent,
+            });
+            occupied.push({ point, radius: boxOccupancyRadius(box.widthPercent, box.heightPercent) });
+          }
         }
 
         const mechStacks = countByHex(rawPlayer.mechHexIds);
@@ -754,31 +772,29 @@ export const getScenarioBank = cache(async (): Promise<TemporaryScenario[]> => {
         const box = hexBoxes.get(entry.hexId);
         if (!box || !points) return;
 
-        let lane = 0;
         Object.entries(entry.resources).forEach(([resourceType, count]) => {
           const tokenPath = RESOURCE_TOKEN_BY_TYPE[resourceType];
           if (!tokenPath || count <= 0) return;
-          const point = samplePointInPolygonAvoiding(
-            points,
-            `${raw.scenarioId}-resource-${entry.hexId}-${resourceType}-${entryIndex}-${lane}`,
-            occupied,
-            boxOccupancyRadius(box.widthPercent, box.heightPercent),
-          );
-          placements.push({
-            id: `${raw.scenarioId}-${playerCount}-resource-${entry.hexId}-${resourceType}-${entryIndex}`,
-            playerId: "board",
-            kind: "resource",
-            tokenPath,
-            x: point.x,
-            y: point.y,
-            stackCount: count,
-            boxWidthPercent: box.widthPercent,
-            boxHeightPercent: box.heightPercent,
-          });
+          for (let resourceIndex = 0; resourceIndex < count; resourceIndex += 1) {
+            const point = samplePointInPolygonAvoiding(
+              points,
+              `${raw.scenarioId}-resource-${entry.hexId}-${resourceType}-${entryIndex}-${resourceIndex + 1}`,
+              occupied,
+              boxOccupancyRadius(box.widthPercent, box.heightPercent),
+            );
+            placements.push({
+              id: `${raw.scenarioId}-${playerCount}-resource-${entry.hexId}-${resourceType}-${entryIndex}-${resourceIndex + 1}`,
+              playerId: "board",
+              kind: "resource",
+              tokenPath,
+              x: point.x,
+              y: point.y,
+              boxWidthPercent: box.widthPercent,
+              boxHeightPercent: box.heightPercent,
+            });
 
-          occupied.push({ point, radius: boxOccupancyRadius(box.widthPercent, box.heightPercent) });
-
-          lane += 1;
+            occupied.push({ point, radius: boxOccupancyRadius(box.widthPercent, box.heightPercent) });
+          }
         });
       });
 
