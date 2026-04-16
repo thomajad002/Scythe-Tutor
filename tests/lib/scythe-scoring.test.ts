@@ -1,6 +1,7 @@
 import {
   evaluateBreakdownAttempt,
   evaluateFullBreakdownAttempt,
+  getBreakdownAttemptHints,
   getLayeredHints,
   getPopularityTier,
   scoreScenario,
@@ -182,6 +183,38 @@ describe("evaluateFullBreakdownAttempt", () => {
 
     expect(evaluation.isFullyCorrect).toBe(false);
     expect(evaluation.errors.some((error) => error.field === "territories")).toBe(true);
+  });
+});
+
+describe("getBreakdownAttemptHints", () => {
+  it("returns field-specific bottom-out hints for total scoring", () => {
+    const scenario = {
+      stars: 3,
+      territories: 5,
+      resources: 11,
+      coins: 7,
+      popularity: 8,
+      factoryControlled: true,
+      structureBonusCoins: 6,
+    };
+    const breakdown = scoreFullScenario(scenario);
+
+    const hints = getBreakdownAttemptHints(
+      [
+        { field: "stars", code: "incorrect_component", message: "x" },
+        { field: "total", code: "arithmetic_sum_error", message: "x" },
+      ],
+      4,
+      {
+        scenario,
+        breakdown,
+      },
+    );
+
+    expect(hints).toEqual([
+      "Bottom-out: 3 stars x 4 = 12.",
+      "Bottom-out: 12 + 21 + 10 + 7 + 6 = 56.",
+    ]);
   });
 });
 

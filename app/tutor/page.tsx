@@ -2,6 +2,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { BoardMap } from "@/components/tutor/board-map";
 import { CoinPile } from "@/components/tutor/coin-pile";
+import { TotalScoringForm } from "@/components/tutor/total-scoring-form";
 import { requireUser } from "@/lib/auth/server";
 import { loadScytheBoardData } from "@/lib/scythe/board-data";
 import {
@@ -113,6 +114,36 @@ function readParam(value: string | string[] | undefined): string | null {
 function readIntParam(value: string | string[] | undefined): number | null {
   const parsed = Number.parseInt(readParam(value) ?? "", 10);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseHintsMessage(message: string | null): string[] {
+  if (!message) {
+    return [];
+  }
+
+  return message
+    .split(" | ")
+    .map((hint) => hint.trim())
+    .filter(Boolean);
+}
+
+function HintList({ message }: { message: string | null }) {
+  const hints = parseHintsMessage(message);
+
+  if (hints.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-200">
+      <p className="font-medium">Hints</p>
+      <ul className="mt-2 list-disc space-y-1 pl-5">
+        {hints.map((hint, index) => (
+          <li key={`${index}-${hint}`}>{hint}</li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 function chooseTerritoriesFactoryMode(coverage: Awaited<ReturnType<typeof getTerritoriesFactoryCoverage>>): "with_factory" | "without_factory" {
@@ -453,105 +484,108 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                 className="w-full"
               />
 
-              <div className="grid gap-2 rounded-xl border border-border bg-surface-2 p-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
-                {subtypeScenario.players.map((player) => (
-                  <div key={player.playerId} className="rounded-lg border border-border/60 bg-surface p-3">
-                    <p className="font-medium">{player.displayName}</p>
-                    <p className="text-muted">Stars {player.stars} | Territories {player.territories}</p>
-                    <p className="text-muted">Resources {player.resources} | Coins {player.coins}</p>
-                    <p className="text-muted">Popularity {player.popularity} | Factory {player.factoryControlled ? "Yes" : "No"}</p>
-                    <p className="text-muted">Structure bonus {player.structureBonusCoins ?? 0}</p>
+              {activeSubtype === "total_scoring" || activeSubtype === "winner_tiebreakers" ? (
+                <CoinPile
+                  scenarioId={subtypeScenario.id}
+                  players={subtypeScenario.players.map((player) => ({
+                    playerId: player.playerId,
+                    displayName: player.displayName,
+                    coins: player.coins,
+                  }))}
+                />
+              ) : null}
+
+              {activeSubtype === "total_scoring" ? (
+                <TotalScoringForm
+                  action={submitSubtypeTutorAttempt}
+                  scenarioId={subtypeScenario.id}
+                  subtypeId={activeSubtype}
+                />
+              ) : (
+                <form action={submitSubtypeTutorAttempt} className="space-y-3">
+                  <input type="hidden" name="subtype_id" value={activeSubtype} />
+                  <input type="hidden" name="scenario_id" value={subtypeScenario.id} />
+
+                  {activeSubtype === "winner_tiebreakers" ? (
+                    <p className="rounded-xl border border-border bg-surface-2 p-3 text-sm text-muted">
+                      All players are tied at the coin total. Pick the winner and the tiebreak reason.
+                    </p>
+                  ) : null}
+
+                  {activeSubtype === "popularity_tiers" ? (
+                    <label className="block text-sm text-muted">
+                      Select popularity tier
+                      <select name="value" className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-foreground" defaultValue="low">
+                        <option value="low">low (0-6)</option>
+                        <option value="mid">mid (7-12)</option>
+                        <option value="high">high (13-18)</option>
+                      </select>
+                    </label>
+                  ) : null}
+
+                  {activeSubtype === "winner_tiebreakers" ? (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <fieldset className="rounded-xl border border-border bg-surface-2 p-3">
+                        <legend className="px-1 text-sm text-muted">Winner</legend>
+                        <div className="mt-2 space-y-2">
+                          {subtypeScenario.players.map((player) => (
+                            <label key={player.playerId} className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-foreground">
+                              <input type="radio" name="winner_id" value={player.playerId} defaultChecked={player.playerId === subtypeScenario.players[0]?.playerId} />
+                              <span>{player.displayName}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </fieldset>
+
+                      <fieldset className="rounded-xl border border-border bg-surface-2 p-3">
+                        <legend className="px-1 text-sm text-muted">Reason</legend>
+                        <div className="mt-2 space-y-2">
+                          {Object.entries(WINNER_TIEBREAK_REASON_LABELS).map(([reasonId, reasonLabel]) => (
+                            <label key={reasonId} className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-foreground">
+                              <input type="radio" name="reason_id" value={reasonId} defaultChecked={reasonId === "unitsAndStructures"} />
+                              <span>{reasonLabel}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </fieldset>
+                    </div>
+                  ) : null}
+
+                  {activeSubtype !== "popularity_tiers" && activeSubtype !== "winner_tiebreakers" ? (
+                    <label className="block text-sm text-muted">
+                      Enter computed value for {SUBTYPE_LABELS[activeSubtype]}
+                      <input className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-foreground" type="number" name="value" required />
+                    </label>
+                  ) : null}
+
+                  <div className="flex flex-wrap gap-2">
+                    {resultMessage === "correct" ? (
+                      <Button type="submit" formAction={refreshTemporarySubtypeScenario} formNoValidate>
+                        Next question
+                      </Button>
+                    ) : (
+                      <Button type="submit">Submit Answer</Button>
+                    )}
                   </div>
-                ))}
-              </div>
+                </form>
+              )}
 
-              <form action={submitSubtypeTutorAttempt} className="space-y-3">
-                <input type="hidden" name="subtype_id" value={activeSubtype} />
-                <input type="hidden" name="scenario_id" value={subtypeScenario.id} />
-
-                {activeSubtype === "winner_tiebreakers" ? (
-                  <p className="rounded-xl border border-border bg-surface-2 p-3 text-sm text-muted">
-                    All players are tied at the coin total. Pick the winner and the tiebreak reason.
-                  </p>
-                ) : null}
-
-                {activeSubtype === "popularity_tiers" ? (
-                  <label className="block text-sm text-muted">
-                    Select popularity tier
-                    <select name="value" className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-foreground" defaultValue="low">
-                      <option value="low">low (0-6)</option>
-                      <option value="mid">mid (7-12)</option>
-                      <option value="high">high (13-18)</option>
-                    </select>
-                  </label>
-                ) : null}
-
-                {activeSubtype === "winner_tiebreakers" ? (
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <fieldset className="rounded-xl border border-border bg-surface-2 p-3">
-                      <legend className="px-1 text-sm text-muted">Winner</legend>
-                      <div className="mt-2 space-y-2">
-                        {subtypeScenario.players.map((player) => (
-                          <label key={player.playerId} className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-foreground">
-                            <input type="radio" name="winner_id" value={player.playerId} defaultChecked={player.playerId === subtypeScenario.players[0]?.playerId} />
-                            <span>{player.displayName}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </fieldset>
-
-                    <fieldset className="rounded-xl border border-border bg-surface-2 p-3">
-                      <legend className="px-1 text-sm text-muted">Reason</legend>
-                      <div className="mt-2 space-y-2">
-                        {Object.entries(WINNER_TIEBREAK_REASON_LABELS).map(([reasonId, reasonLabel]) => (
-                          <label key={reasonId} className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-foreground">
-                            <input type="radio" name="reason_id" value={reasonId} defaultChecked={reasonId === "unitsAndStructures"} />
-                            <span>{reasonLabel}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </fieldset>
-                  </div>
-                ) : null}
-
-                {activeSubtype !== "popularity_tiers" && activeSubtype !== "winner_tiebreakers" ? (
-                  <label className="block text-sm text-muted">
-                    Enter computed value for {SUBTYPE_LABELS[activeSubtype]}
-                    <input className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-foreground" type="number" name="value" required />
-                  </label>
-                ) : null}
-
-                <div className="flex flex-wrap gap-2">
-                  {resultMessage === "correct" ? (
-                    <Button type="submit" formAction={refreshTemporarySubtypeScenario} formNoValidate>
-                      Next question
-                    </Button>
-                  ) : (
-                    <Button type="submit">Submit Answer</Button>
-                  )}
-                </div>
-
-                {successMessage ? (
-                  <p className={`rounded-xl border p-3 text-sm ${subtypeFeedbackTone}`}>
-                    {successMessage}
-                  </p>
-                ) : null}
-                {errorMessage ? (
-                  <p className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-200">
-                    {errorMessage}
-                  </p>
-                ) : null}
-                {summaryMessage && activeStage !== "subtype" ? (
-                  <p className="rounded-xl border border-sky-500/40 bg-sky-500/10 p-3 text-sm text-sky-200">
-                    {summaryMessage}
-                  </p>
-                ) : null}
-                {hintsMessage ? (
-                  <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-200">
-                    Hints: {hintsMessage}
-                  </p>
-                ) : null}
-              </form>
+              {successMessage ? (
+                <p className={`rounded-xl border p-3 text-sm ${subtypeFeedbackTone}`}>
+                  {successMessage}
+                </p>
+              ) : null}
+              {errorMessage ? (
+                <p className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-200">
+                  {errorMessage}
+                </p>
+              ) : null}
+              {summaryMessage && activeStage !== "subtype" ? (
+                <p className="rounded-xl border border-sky-500/40 bg-sky-500/10 p-3 text-sm text-sky-200">
+                  {summaryMessage}
+                </p>
+              ) : null}
+              <HintList message={hintsMessage} />
 
               {activeSubtypeMastered ? (
                 masteredAllSubtypes ? (
@@ -625,11 +659,7 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                       {summaryMessage}
                     </p>
                   ) : null}
-                  {hintsMessage ? (
-                    <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-200">
-                      Hints: {hintsMessage}
-                    </p>
-                  ) : null}
+                  <HintList message={hintsMessage} />
 
                   <form action={refreshTemporarySinglePlayerScenario}>
                     <Button type="submit" variant="secondary">Next question</Button>
@@ -886,14 +916,16 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
             </div>
           </Card>
 
-          <CoinPile
-            scenarioId={activeCoinScenarioId}
-            players={coinPlayers.map((player) => ({
-              playerId: player.playerId,
-              displayName: player.displayName,
-              coins: player.coins,
-            }))}
-          />
+          {activeStage === "single-player" || activeStage === "multiplayer" ? (
+            <CoinPile
+              scenarioId={activeCoinScenarioId}
+              players={coinPlayers.map((player) => ({
+                playerId: player.playerId,
+                displayName: player.displayName,
+                coins: player.coins,
+              }))}
+            />
+          ) : null}
         </aside>
       </div>
     </main>

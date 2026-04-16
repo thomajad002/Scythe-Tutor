@@ -6,6 +6,7 @@ import { requireUser } from "@/lib/auth/server";
 import {
   evaluateFullBreakdownAttempt,
   getPopularityTier,
+  getBreakdownAttemptHints,
   getLayeredHints,
   scoreFullScenario,
   scoreMultiplayerRound,
@@ -430,6 +431,32 @@ export async function submitSubtypeTutorAttempt(formData: FormData) {
             expectedValue: expectedTier,
           }),
         ];
+      }
+    } else if (subtypeId === "total_scoring") {
+      const attempt: BreakdownAttempt = {
+        stars: toOptionalInt(formData.get("stars")),
+        territories: toOptionalInt(formData.get("territories")),
+        resources: toOptionalInt(formData.get("resources")),
+        coins: toOptionalInt(formData.get("coins")),
+        structureBonus: toOptionalInt(formData.get("structure_bonus")),
+        total: toOptionalInt(formData.get("total")),
+      };
+      const evaluation = evaluateFullBreakdownAttempt(player, attempt);
+      isCorrect = evaluation.isFullyCorrect;
+      summary = [
+        `Expected stars: ${evaluation.expected.stars}`,
+        `territories: ${evaluation.expected.territories}`,
+        `resources: ${evaluation.expected.resources}`,
+        `coins: ${evaluation.expected.coins}`,
+        `structure bonus: ${evaluation.expected.structureBonus}`,
+        `total: ${evaluation.expected.total}`,
+      ].join(" | ");
+
+      if (!isCorrect) {
+        adaptiveHints = getBreakdownAttemptHints(evaluation.errors, adaptiveLevel, {
+          scenario: player,
+          breakdown: full,
+        });
       }
     } else {
       const submittedValue = toOptionalInt(submittedRaw);

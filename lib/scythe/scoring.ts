@@ -609,3 +609,98 @@ export function getLayeredHints(
   const uniqueCodes = Array.from(new Set(errors.map((error) => error.code)));
   return uniqueCodes.map((code) => HINT_TEXT[code][level]);
 }
+
+type BreakdownHintContext = {
+  scenario: FullScoringScenarioInput;
+  breakdown: FullScoreBreakdown;
+};
+
+export function getBreakdownAttemptHints(
+  errors: BreakdownEvaluation["errors"],
+  level: LayeredHintLevel,
+  context: BreakdownHintContext,
+): string[] {
+  return errors.map((error) => {
+    switch (error.field) {
+      case "stars":
+        switch (level) {
+          case 1:
+            return "Count stars only, then apply the popularity tier.";
+          case 2:
+            return "Use the star multiplier for the tier: low 3, mid 4, high 5.";
+          case 3:
+            return `This player has ${context.scenario.stars} stars, so compute stars x ${context.breakdown.multipliers.stars}.`;
+          default:
+            return `Bottom-out: ${context.scenario.stars} stars x ${context.breakdown.multipliers.stars} = ${context.breakdown.points.stars}.`;
+        }
+
+      case "territories":
+        switch (level) {
+          case 1:
+            return context.scenario.factoryControlled
+              ? "Count controlled territories and include the Factory if it is controlled."
+              : "Count controlled territories, not raw units.";
+          case 2:
+            return context.scenario.factoryControlled
+              ? "If the Factory is controlled, add 2 to territories before multiplying because it counts as 3 territories."
+              : "Use controlled territories only, then apply the popularity multiplier.";
+          case 3:
+            return context.scenario.factoryControlled
+              ? `This player controls the Factory, so use ${context.breakdown.effectiveTerritories} effective territories before multiplying.`
+              : `This player has ${context.breakdown.effectiveTerritories} effective territories, so multiply that count by ${context.breakdown.multipliers.territories}.`;
+          default:
+            return context.scenario.factoryControlled
+              ? `Bottom-out: ${context.scenario.territories} + 2 = ${context.breakdown.effectiveTerritories}, then ${context.breakdown.effectiveTerritories} x ${context.breakdown.multipliers.territories} = ${context.breakdown.points.territories}.`
+              : `Bottom-out: ${context.breakdown.effectiveTerritories} territories x ${context.breakdown.multipliers.territories} = ${context.breakdown.points.territories}.`;
+        }
+
+      case "resources":
+        switch (level) {
+          case 1:
+            return "Resources score in pairs, not singles.";
+          case 2:
+            return "Divide resource tokens by 2 and round down before multiplying.";
+          case 3:
+            return `This player has ${context.scenario.resources} resources, which makes ${context.breakdown.resourcePairs} pairs.`;
+          default:
+            return `Bottom-out: ${context.breakdown.resourcePairs} pairs x ${context.breakdown.multipliers.resources} = ${context.breakdown.points.resources}.`;
+        }
+
+      case "coins":
+        switch (level) {
+          case 1:
+            return "Coins score one-for-one.";
+          case 2:
+            return "Use the coin total directly; no multiplier applies.";
+          case 3:
+            return `This player has ${context.scenario.coins} coins, so the coin score is ${context.breakdown.points.coins}.`;
+          default:
+            return `Bottom-out: ${context.scenario.coins} coins = ${context.breakdown.points.coins}.`;
+        }
+
+      case "structureBonus":
+        switch (level) {
+          case 1:
+            return "Use the structure bonus coins as their own category.";
+          case 2:
+            return "Do not mix the structure bonus into the coin total.";
+          case 3:
+            return `This scenario awards ${context.breakdown.points.structureBonus} structure bonus coins.`;
+          default:
+            return `Bottom-out: structure bonus = ${context.breakdown.points.structureBonus}.`;
+        }
+
+      case "total":
+        switch (level) {
+          case 1:
+            return "Add every category once, then check the total.";
+          case 2:
+            return "Total = stars + territories + resources + coins + structure bonus.";
+          case 3:
+            return `Recompute each category from the board, then add them to reach ${context.breakdown.points.total}.`;
+          default:
+            return `Bottom-out: ${context.breakdown.points.stars} + ${context.breakdown.points.territories} + ${context.breakdown.points.resources} + ${context.breakdown.points.coins} + ${context.breakdown.points.structureBonus} = ${context.breakdown.points.total}.`;
+        }
+    }
+  });
+}
