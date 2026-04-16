@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { FactionLabel } from "@/components/tutor/faction-label";
 
 type PlayerCoins = {
   playerId: string;
@@ -11,6 +12,7 @@ type PlayerCoins = {
 type CoinPileProps = {
   scenarioId: string;
   players: PlayerCoins[];
+  hidePlayerTotals?: boolean;
 };
 
 type CoinToken = {
@@ -73,7 +75,7 @@ function expandCoinTokens(seedKey: string, coins: number): CoinToken[] {
   return tokens;
 }
 
-export function CoinPile({ scenarioId, players }: CoinPileProps) {
+export function CoinPile({ scenarioId, players, hidePlayerTotals = false }: CoinPileProps) {
   const [sortedView, setSortedView] = useState(false);
 
   const playerTokens = useMemo(() => {
@@ -100,8 +102,10 @@ export function CoinPile({ scenarioId, players }: CoinPileProps) {
         {playerTokens.map((player) => (
           <div key={player.playerId} className="rounded-lg border border-border/70 bg-surface-2 p-2">
             <div className="mb-2 flex items-center justify-between">
-              <p className="text-xs text-muted">{player.displayName}</p>
-              <p className="text-xs font-semibold text-foreground">{player.coins} coins</p>
+              <FactionLabel value={player.displayName} className="text-sm" />
+              {hidePlayerTotals ? null : (
+                <p className="text-xs font-semibold text-foreground">{player.coins} coins</p>
+              )}
             </div>
 
             {sortedView ? (
@@ -121,8 +125,8 @@ export function CoinPile({ scenarioId, players }: CoinPileProps) {
                                 : "twenty_front"
                         }.webp`}
                         alt={`${denomination} coin`}
-                        className="mx-auto h-6 w-6 object-contain"
-                        style={{ width: "26px", height: "26px" }}
+                        className="mx-auto h-9 w-9 object-contain"
+                        style={{ width: "46px", height: "46px" }}
                       />
                       <p className="text-[10px] text-muted">x{count}</p>
                     </div>
@@ -136,10 +140,10 @@ export function CoinPile({ scenarioId, players }: CoinPileProps) {
                     key={`${player.playerId}-${token.id}-${index}`}
                     src={token.imagePath}
                     alt={`${token.denomination} coin ${token.face}`}
-                    className="h-5 w-5 -rotate-2 object-contain"
+                    className="h-9 w-9 -rotate-2 object-contain"
                     style={{
-                      width: "22px",
-                      height: "22px",
+                      width: "46px",
+                      height: "46px",
                       marginLeft: index % 5 === 0 ? 0 : -4,
                       transform: `rotate(${(index % 7) - 3}deg)`,
                     }}

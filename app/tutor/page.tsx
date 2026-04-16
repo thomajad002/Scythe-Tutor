@@ -2,6 +2,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { BoardMap } from "@/components/tutor/board-map";
 import { CoinPile } from "@/components/tutor/coin-pile";
+import { FactionLabel, formatFactionLabel } from "@/components/tutor/faction-label";
 import { TotalScoringForm } from "@/components/tutor/total-scoring-form";
 import { requireUser } from "@/lib/auth/server";
 import { loadScytheBoardData } from "@/lib/scythe/board-data";
@@ -486,6 +487,7 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
 
               {activeSubtype === "total_scoring" || activeSubtype === "winner_tiebreakers" ? (
                 <CoinPile
+                  hidePlayerTotals={activeSubtype === "total_scoring"}
                   scenarioId={subtypeScenario.id}
                   players={subtypeScenario.players.map((player) => ({
                     playerId: player.playerId,
@@ -531,7 +533,7 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                           {subtypeScenario.players.map((player) => (
                             <label key={player.playerId} className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-foreground">
                               <input type="radio" name="winner_id" value={player.playerId} defaultChecked={player.playerId === subtypeScenario.players[0]?.playerId} />
-                              <span>{player.displayName}</span>
+                              <FactionLabel value={player.displayName} />
                             </label>
                           ))}
                         </div>
@@ -628,7 +630,7 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                     <p>Popularity: {singleScenario.players[0].popularity}</p>
                     <p>Factory controlled: {singleScenario.players[0].factoryControlled ? "Yes" : "No"}</p>
                     <p>Structure bonus: {singleScenario.players[0].structureBonusCoins ?? 0}</p>
-                    <p className="sm:col-span-2 lg:col-span-3">Faction: {singleScenario.players[0].faction}</p>
+                    <p className="sm:col-span-2 lg:col-span-3">Faction: <FactionLabel value={singleScenario.players[0].faction} /></p>
                   </div>
 
                   <form action={submitSinglePlayerScoringAttempt} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -697,7 +699,7 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                       {multiplayerScenario.players.map((player) => (
                         <label key={player.playerId} className="text-sm text-muted">
-                          {player.displayName} total (Stars {player.stars}, Territories {player.territories}, Resources {player.resources}, Coins {player.coins}, Pop {player.popularity})
+                          <FactionLabel value={player.displayName} className="text-sm" /> total (Stars {player.stars}, Territories {player.territories}, Resources {player.resources}, Coins {player.coins}, Pop {player.popularity})
                           <input className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-foreground" type="number" name={`total_${player.playerId}`} required />
                         </label>
                       ))}
@@ -707,7 +709,7 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                       Winner
                       <select name="winner_id" className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-foreground">
                         {multiplayerScenario.players.map((player) => (
-                          <option key={player.playerId} value={player.playerId}>{player.displayName}</option>
+                          <option key={player.playerId} value={player.playerId}>{formatFactionLabel(player.displayName)}</option>
                         ))}
                       </select>
                     </label>

@@ -189,7 +189,7 @@ function defaultPieceScale(kind: PieceKind): number {
 function factionColorClass(color: FactionColor): string {
   switch (color) {
     case "black":
-      return "text-slate-900";
+      return "text-slate-900 [-webkit-text-stroke:0.45px_#c8a64a] [text-shadow:0_0_1px_rgba(200,166,74,0.45)]";
     case "red":
       return "text-rose-400";
     case "blue":
