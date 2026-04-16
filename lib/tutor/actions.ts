@@ -10,8 +10,12 @@ import {
   scoreFullScenario,
   scoreMultiplayerRound,
   type BreakdownAttempt,
-  type LayeredHintLevel,
 } from "@/lib/scythe/scoring";
+import {
+  chooseAdaptiveHintLevel,
+  getSubtypeHints,
+  type TutorAttemptHistoryItem,
+} from "@/lib/tutor/hints";
 import {
   SUBTYPE_IDS,
   allSubtypesMastered,
@@ -85,29 +89,11 @@ function sendSuccessWithStage(
   redirect(`${TUTOR_PATH}?${params.toString()}`);
 }
 
-function chooseAdaptiveHintLevel(
-  correctCount: number,
-  incorrectCount: number,
-  constraintViolationCount: number,
-): LayeredHintLevel {
-  const difficultySignal = Math.max(0, incorrectCount - correctCount) + constraintViolationCount;
-
-  if (difficultySignal >= 4) {
-    return 3;
-  }
-
-  if (difficultySignal >= 2) {
-    return 2;
-  }
-
-  return 1;
-}
-
 async function chooseTerritoriesFactoryMode(userId: string): Promise<"with_factory" | "without_factory"> {
   const coverage = await getTerritoriesFactoryCoverage(userId);
 
   if (!coverage.attemptedWithFactory && !coverage.attemptedWithoutFactory) {
-    return Math.random() < 0.5 ? "with_factory" : "without_factory";
+    return "without_factory";
   }
 
   if (!coverage.attemptedWithFactory) {
@@ -129,11 +115,11 @@ async function chooseTerritoriesFactoryMode(userId: string): Promise<"with_facto
   return Math.random() < 0.5 ? "with_factory" : "without_factory";
 }
 
-async function getSubtypeAttemptCounts(userId: string, subtypeId: SubtypeId): Promise<{ correct: number; incorrect: number }> {
+async function getSubtypeAttemptHistory(userId: string, subtypeId: SubtypeId): Promise<TutorAttemptHistoryItem[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("subtype_attempt_events")
-    .select("is_correct")
+    .select("is_correct, first_try_correct")
     .eq("user_id", userId)
     .eq("subtype_id", subtypeId)
     .order("created_at", { ascending: false })
@@ -143,78 +129,10 @@ async function getSubtypeAttemptCounts(userId: string, subtypeId: SubtypeId): Pr
     sendError(error.message);
   }
 
-  const correct = (data ?? []).filter((row) => row.is_correct).length;
-  return {
-    correct,
-    incorrect: (data ?? []).length - correct,
-  };
-}
-
-function getSubtypeHint(subtypeId: SubtypeId, level: LayeredHintLevel): string {
-  const bySubtype: Record<SubtypeId, Record<LayeredHintLevel, string>> = {
-    popularity_tiers: {
-      1: "Find the popularity tier first.",
-      2: "Use low for 0-6, mid for 7-12, high for 13-18.",
-      3: "Example: popularity 10 is mid tier.",
-    },
-    stars_scoring: {
-      1: "Use the star multiplier from the popularity tier.",
-      2: "Compute stars x tier.starMultiplier.",
-      3: "Tier multipliers for stars are 3/4/5.",
-    },
-    territories_scoring: {
-      1: "Use territory multiplier and check Factory rule.",
-      2: "If Factory is controlled, add +2 effective territories.",
-      3: "Territory points = (territories + factory bonus) x tier territory multiplier.",
-    },
-    resources_scoring: {
-      1: "Resources score in pairs.",
-      2: "Compute floor(resources / 2), then multiply by tier resource value.",
-      3: "Example: 11 resources => 5 pairs.",
-    },
-    structure_bonus_farm_or_tundra: {
-      1: "Count structures on farm or tundra hexes only.",
-      2: "Use the active structure bonus tile and award only its matching pattern.",
-      3: "Structure bonus coins are added as-is and are not popularity-multiplied.",
-    },
-    structure_bonus_tunnel_with_structures: {
-      1: "Count structures on tunnel hexes only.",
-      2: "Use the active structure bonus tile and award only its matching pattern.",
-      3: "Structure bonus coins are added as-is and are not popularity-multiplied.",
-    },
-    structure_bonus_longest_structure_row: {
-      1: "Find the longest connected structure row first.",
-      2: "Use the active structure bonus tile and award only its matching pattern.",
-      3: "Structure bonus coins are added as-is and are not popularity-multiplied.",
-    },
-    structure_bonus_tunnel_adjacent: {
-      1: "Count structures adjacent to tunnel hexes only.",
-      2: "Use the active structure bonus tile and award only its matching pattern.",
-      3: "Structure bonus coins are added as-is and are not popularity-multiplied.",
-    },
-    structure_bonus_encounter_adjacent: {
-      1: "Count structures adjacent to encounter hexes only.",
-      2: "Use the active structure bonus tile and award only its matching pattern.",
-      3: "Structure bonus coins are added as-is and are not popularity-multiplied.",
-    },
-    structure_bonus_lake_adjacent: {
-      1: "Count structures adjacent to lakes only.",
-      2: "Use the active structure bonus tile and award only its matching pattern.",
-      3: "Structure bonus coins are added as-is and are not popularity-multiplied.",
-    },
-    total_scoring: {
-      1: "Add all components exactly once.",
-      2: "Total = stars + territories + resources + coins + structure bonus.",
-      3: "Recompute each component, then sum left-to-right.",
-    },
-    winner_tiebreakers: {
-      1: "Compare totals first.",
-      2: "If tied, use tiebreak order from the rules.",
-      3: "Tiebreak order: units+structures, power, popularity, resources, territories, stars.",
-    },
-  };
-
-  return bySubtype[subtypeId][level];
+  return (data ?? []).map((row) => ({
+    isCorrect: row.is_correct,
+    firstTryCorrect: row.first_try_correct,
+  }));
 }
 
 async function recomputeSubtypeProgressForUser(userId: string, subtypeId: SubtypeId) {
@@ -440,16 +358,28 @@ export async function submitSubtypeTutorAttempt(formData: FormData) {
 
   let isCorrect = false;
   let summary = "";
-  let constraintViolationCount = 0;
   let adaptiveHints: string[] = [];
 
-  const priorAttemptCounts = await getSubtypeAttemptCounts(user.id, subtypeId);
+  const priorAttempts = await getSubtypeAttemptHistory(user.id, subtypeId);
+  const adaptiveLevel = chooseAdaptiveHintLevel(priorAttempts);
 
   if (subtypeId === "winner_tiebreakers") {
     const submittedWinnerId = String(formData.get("winner_id") ?? "");
     const round = scoreMultiplayerRound(scenario.players);
     isCorrect = submittedWinnerId === round.winnerPlayerId;
     summary = `Expected winner: ${round.winnerPlayerId.toUpperCase()} | Tiebreak reason: ${round.tiebreakReason}`;
+
+    if (!isCorrect) {
+      adaptiveHints = [
+        getSubtypeHints(subtypeId, adaptiveLevel, {
+          player: scenario.players[0],
+          breakdown: scoreFullScenario(scenario.players[0]),
+          expectedValue: round.winnerPlayerId,
+          winnerDisplayName: scenario.players.find((player) => player.playerId === round.winnerPlayerId)?.displayName,
+          winnerTiebreakReason: round.tiebreakReason,
+        }),
+      ];
+    }
   } else {
     const player = scenario.players[0];
     const full = scoreFullScenario(player);
@@ -462,8 +392,13 @@ export async function submitSubtypeTutorAttempt(formData: FormData) {
       summary = `Expected tier: ${expectedTier} (popularity ${player.popularity})`;
 
       if (!isCorrect) {
-        const adaptiveLevel = chooseAdaptiveHintLevel(priorAttemptCounts.correct, priorAttemptCounts.incorrect + 1, 1);
-        adaptiveHints = [getSubtypeHint(subtypeId, adaptiveLevel)];
+        adaptiveHints = [
+          getSubtypeHints(subtypeId, adaptiveLevel, {
+            player,
+            breakdown: full,
+            expectedValue: expectedTier,
+          }),
+        ];
       }
     } else {
       const submittedValue = toOptionalInt(submittedRaw);
@@ -484,36 +419,13 @@ export async function submitSubtypeTutorAttempt(formData: FormData) {
       isCorrect = submittedValue === expectedValue;
       summary = `Expected value: ${expectedValue}`;
 
-      const fieldBySubtype: Record<Exclude<SubtypeId, "popularity_tiers" | "winner_tiebreakers">, keyof BreakdownAttempt> = {
-        stars_scoring: "stars",
-        territories_scoring: "territories",
-        resources_scoring: "resources",
-        structure_bonus_farm_or_tundra: "structureBonus",
-        structure_bonus_tunnel_with_structures: "structureBonus",
-        structure_bonus_longest_structure_row: "structureBonus",
-        structure_bonus_tunnel_adjacent: "structureBonus",
-        structure_bonus_encounter_adjacent: "structureBonus",
-        structure_bonus_lake_adjacent: "structureBonus",
-        total_scoring: "total",
-      };
-      const activeField = fieldBySubtype[subtypeId as Exclude<SubtypeId, "popularity_tiers" | "winner_tiebreakers">];
-
-      const cbmEvaluation = evaluateFullBreakdownAttempt(player, {
-        [activeField]: submittedValue,
-      });
-
-      const violations = cbmEvaluation.errors.filter((error) => error.field === activeField);
-      constraintViolationCount = violations.length;
-
       if (!isCorrect) {
-        const adaptiveLevel = chooseAdaptiveHintLevel(
-          priorAttemptCounts.correct,
-          priorAttemptCounts.incorrect + 1,
-          Math.max(1, constraintViolationCount),
-        );
         adaptiveHints = [
-          getSubtypeHint(subtypeId, adaptiveLevel),
-          ...getLayeredHints(violations, adaptiveLevel),
+          getSubtypeHints(subtypeId, adaptiveLevel, {
+            player,
+            breakdown: full,
+            expectedValue,
+          }),
         ];
       }
     }
@@ -542,13 +454,8 @@ export async function submitSubtypeTutorAttempt(formData: FormData) {
       "subtype",
       summary,
       undefined,
-      { subtype: subtypeId, result: "correct" },
+      { subtype: subtypeId, result: "correct", scenario: scenario.id },
     );
-  }
-
-  if (adaptiveHints.length === 0) {
-    const fallbackLevel = chooseAdaptiveHintLevel(priorAttemptCounts.correct, priorAttemptCounts.incorrect + 1, Math.max(1, constraintViolationCount));
-    adaptiveHints = [getSubtypeHint(subtypeId, fallbackLevel)];
   }
 
   sendSuccessWithStage(
@@ -556,7 +463,7 @@ export async function submitSubtypeTutorAttempt(formData: FormData) {
     "subtype",
     summary + ` | First-try streak: ${next.subtypeMastery[subtypeId] ? "mastered" : "building"}`,
     adaptiveHints,
-    { subtype: subtypeId, result: "incorrect" },
+    { subtype: subtypeId, result: "incorrect", scenario: scenario.id },
   );
 }
 
@@ -701,7 +608,7 @@ export async function submitSinglePlayerScoringAttempt(formData: FormData) {
       "single-player",
       summary,
       undefined,
-      { result: "correct" },
+      { result: "correct", scenario: scenario.id },
     );
   }
 
@@ -716,7 +623,7 @@ export async function submitSinglePlayerScoringAttempt(formData: FormData) {
     "single-player",
     summary,
     hints,
-    { result: "incorrect" },
+    { result: "incorrect", scenario: scenario.id },
   );
 }
 
@@ -783,11 +690,19 @@ export async function submitMultiplayerScoringAttempt(formData: FormData) {
       `Correct round. ${nextUnlocked}-player scenarios unlocked.`,
       "multiplayer",
       summary,
+      undefined,
+      { scenario: scenario.id, players: String(playerCount), result: "correct" },
     );
   }
 
   if (isCorrect) {
-    sendSuccessWithStage("Correct round. Multiplayer attempt saved.", "multiplayer", summary);
+    sendSuccessWithStage(
+      "Correct round. Multiplayer attempt saved.",
+      "multiplayer",
+      summary,
+      undefined,
+      { scenario: scenario.id, players: String(playerCount), result: "correct" },
+    );
   }
 
   const hints = [
@@ -801,6 +716,7 @@ export async function submitMultiplayerScoringAttempt(formData: FormData) {
     "multiplayer",
     summary,
     hints,
+    { scenario: scenario.id, players: String(playerCount), result: "incorrect" },
   );
 }
 

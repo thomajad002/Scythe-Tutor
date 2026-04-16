@@ -270,7 +270,28 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-function samplePointInPolygon(points: HexPoint[], seedKey: string, preferBottom = false): HexPoint {
+function isInReservedTopCenterZone(
+  point: HexPoint,
+  bounds: { minX: number; maxX: number; minY: number; maxY: number },
+): boolean {
+  const width = bounds.maxX - bounds.minX;
+  const height = bounds.maxY - bounds.minY;
+  if (width <= 0 || height <= 0) {
+    return false;
+  }
+
+  const relativeX = (point.x - bounds.minX) / width;
+  const relativeY = (point.y - bounds.minY) / height;
+
+  return relativeY <= 0.34 && Math.abs(relativeX - 0.5) <= 0.22;
+}
+
+function samplePointInPolygon(
+  points: HexPoint[],
+  seedKey: string,
+  preferBottom = false,
+  preserveHexTypeIcon = false,
+): HexPoint {
   if (points.length === 0) {
     return { x: 0.5, y: 0.5 };
   }
@@ -289,6 +310,10 @@ function samplePointInPolygon(points: HexPoint[], seedKey: string, preferBottom 
       x: Math.max(0, Math.min(1, x)),
       y: Math.max(0, Math.min(1, y)),
     };
+
+    if (preserveHexTypeIcon && isInReservedTopCenterZone(candidate, bounds)) {
+      continue;
+    }
 
     if (pointInPolygon(candidate, points)) {
       return candidate;
@@ -314,6 +339,7 @@ function samplePointInPolygonAvoiding(
   edgeInsetFactor = 0.9,
   minVerticalBias = 0,
   maxVerticalBias = 1,
+  preserveHexTypeIcon = false,
 ): HexPoint {
   if (points.length === 0) {
     return { x: 0.5, y: 0.5 };
@@ -340,6 +366,10 @@ function samplePointInPolygonAvoiding(
       x: Math.max(0, Math.min(1, x)),
       y: Math.max(0, Math.min(1, y)),
     };
+
+    if (preserveHexTypeIcon && isInReservedTopCenterZone(candidate, bounds)) {
+      continue;
+    }
 
     if (!pointInPolygon(candidate, points)) {
       continue;
@@ -373,7 +403,7 @@ function samplePointInPolygonAvoiding(
     return bestCandidate;
   }
 
-  return samplePointInPolygon(points, `${seedKey}-fallback`, preferBottom);
+  return samplePointInPolygon(points, `${seedKey}-fallback`, preferBottom, preserveHexTypeIcon);
 }
 
 function boxFromPoints(points: HexPoint[]): { center: HexPoint; widthPercent: number; heightPercent: number } {
@@ -646,6 +676,11 @@ export const getScenarioBank = cache(async (): Promise<TemporaryScenario[]> => {
               `${raw.scenarioId}-${normalizedPlayer.playerId}-worker-${stack.hexId}-${workerIndex + 1}`,
               occupied,
               boxOccupancyRadius(box.widthPercent, box.heightPercent),
+              false,
+              0.9,
+              0,
+              1,
+              true,
             );
             placements.push({
               id: `${raw.scenarioId}-${normalizedPlayer.playerId}-worker-${stack.hexId}-${workerIndex + 1}`,
@@ -671,6 +706,11 @@ export const getScenarioBank = cache(async (): Promise<TemporaryScenario[]> => {
             `${raw.scenarioId}-${normalizedPlayer.playerId}-mech-${stack.hexId}`,
             occupied,
             boxOccupancyRadius(box.widthPercent, box.heightPercent),
+            false,
+            0.9,
+            0,
+            1,
+            true,
           );
           placements.push({
             id: `${raw.scenarioId}-${normalizedPlayer.playerId}-mech-${stack.hexId}`,
@@ -694,6 +734,11 @@ export const getScenarioBank = cache(async (): Promise<TemporaryScenario[]> => {
             `${raw.scenarioId}-${normalizedPlayer.playerId}-character`,
             occupied,
             boxOccupancyRadius(characterBox.widthPercent, characterBox.heightPercent),
+            false,
+            0.9,
+            0,
+            1,
+            true,
           );
           placements.push({
             id: `${raw.scenarioId}-${normalizedPlayer.playerId}-character`,
@@ -717,6 +762,11 @@ export const getScenarioBank = cache(async (): Promise<TemporaryScenario[]> => {
             `${raw.scenarioId}-${normalizedPlayer.playerId}-structure-${structure.hexId}-${structure.type}`,
             occupied,
             boxOccupancyRadius(box.widthPercent, box.heightPercent),
+            false,
+            0.9,
+            0,
+            1,
+            true,
           );
           placements.push({
             id: `${raw.scenarioId}-${normalizedPlayer.playerId}-structure-${structure.hexId}-${structure.type}`,
@@ -845,6 +895,11 @@ export const getScenarioBank = cache(async (): Promise<TemporaryScenario[]> => {
               `${raw.scenarioId}-resource-${entry.hexId}-${resourceType}-${entryIndex}-${resourceIndex + 1}`,
               occupied,
               boxOccupancyRadius(box.widthPercent, box.heightPercent),
+              false,
+              0.9,
+              0,
+              1,
+              true,
             );
             placements.push({
               id: `${raw.scenarioId}-${playerCount}-resource-${entry.hexId}-${resourceType}-${entryIndex}-${resourceIndex + 1}`,

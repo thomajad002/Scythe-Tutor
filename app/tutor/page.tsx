@@ -94,7 +94,7 @@ function readIntParam(value: string | string[] | undefined): number | null {
 
 function chooseTerritoriesFactoryMode(coverage: Awaited<ReturnType<typeof getTerritoriesFactoryCoverage>>): "with_factory" | "without_factory" {
   if (!coverage.attemptedWithFactory && !coverage.attemptedWithoutFactory) {
-    return Math.random() < 0.5 ? "with_factory" : "without_factory";
+    return "without_factory";
   }
 
   if (!coverage.attemptedWithFactory) {
@@ -284,6 +284,7 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
   const errorMessage = readParam(params.error);
   const summaryMessage = readParam(params.summary);
   const hintsMessage = readParam(params.hints);
+  const resultMessage = readParam(params.result);
   const requestedStage = parseStage(readParam(params.stage));
   const requestedSubtypeId = parseSubtypeId(readParam(params.subtype));
   const requestedScenarioId = readParam(params.scenario);
@@ -385,6 +386,11 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
   const activeSubtypeMastered = progress.subtypeMastery[activeSubtype] === true;
   const moveOnSubtype = SUBTYPE_IDS.find((subtypeId) => !progress.subtypeMastery[subtypeId] && subtypeId !== activeSubtype)
     ?? nextSubtype;
+  const subtypeFeedbackTone = resultMessage === "correct"
+    ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
+    : resultMessage === "incorrect"
+      ? "border-rose-500/40 bg-rose-500/10 text-rose-200"
+      : "border-emerald-500/40 bg-emerald-500/10 text-emerald-200";
 
   return (
     <main className="mx-auto min-h-full w-full max-w-6xl px-4 py-4 sm:px-6 sm:py-5">
@@ -464,11 +470,17 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                 ) : null}
 
                 <div className="flex flex-wrap gap-2">
-                  <Button type="submit">Submit Answer</Button>
+                  {resultMessage === "correct" ? (
+                    <Button type="submit" formAction={refreshTemporarySubtypeScenario} formNoValidate>
+                      Next question
+                    </Button>
+                  ) : (
+                    <Button type="submit">Submit Answer</Button>
+                  )}
                 </div>
 
                 {successMessage ? (
-                  <p className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm text-emerald-200">
+                  <p className={`rounded-xl border p-3 text-sm ${subtypeFeedbackTone}`}>
                     {successMessage}
                   </p>
                 ) : null}
@@ -477,7 +489,7 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                     {errorMessage}
                   </p>
                 ) : null}
-                {summaryMessage ? (
+                {summaryMessage && activeStage !== "subtype" ? (
                   <p className="rounded-xl border border-sky-500/40 bg-sky-500/10 p-3 text-sm text-sky-200">
                     {summaryMessage}
                   </p>
@@ -566,7 +578,7 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                   ) : null}
 
                   <form action={refreshTemporarySinglePlayerScenario}>
-                    <Button type="submit" variant="secondary">Load Different Temporary Scenario</Button>
+                    <Button type="submit" variant="secondary">Next question</Button>
                   </form>
                 </div>
               ) : (
@@ -619,7 +631,7 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
 
                   <form action={refreshTemporaryMultiplayerScenario}>
                     <input type="hidden" name="player_count" value={String(selectedMultiplayerCount)} />
-                    <Button type="submit" variant="secondary">Load Different Temporary Scenario</Button>
+                    <Button type="submit" variant="secondary">Next question</Button>
                   </form>
                 </div>
               ) : (
