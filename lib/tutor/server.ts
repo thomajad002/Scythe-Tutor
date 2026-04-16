@@ -19,6 +19,15 @@ function normalizeSubtypeMastery(raw: Json | null): Partial<Record<SubtypeId, bo
     result[subtypeId] = source[subtypeId] === true;
   }
 
+  if (source.structure_bonus_scoring === true) {
+    result.structure_bonus_farm_or_tundra = true;
+    result.structure_bonus_tunnel_with_structures = true;
+    result.structure_bonus_longest_structure_row = true;
+    result.structure_bonus_tunnel_adjacent = true;
+    result.structure_bonus_encounter_adjacent = true;
+    result.structure_bonus_lake_adjacent = true;
+  }
+
   return result;
 }
 

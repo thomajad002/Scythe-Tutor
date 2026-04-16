@@ -146,10 +146,35 @@ function getSubtypeHint(subtypeId: SubtypeId, level: LayeredHintLevel): string {
       2: "Compute floor(resources / 2), then multiply by tier resource value.",
       3: "Example: 11 resources => 5 pairs.",
     },
-    structure_bonus_scoring: {
-      1: "Use the structure bonus coins directly.",
-      2: "Structure bonus is added as-is, no popularity multiplier.",
-      3: "Do not multiply structure bonus by any tier value.",
+    structure_bonus_farm_or_tundra: {
+      1: "Count structures on farm or tundra hexes only.",
+      2: "Use the active structure bonus tile and award only its matching pattern.",
+      3: "Structure bonus coins are added as-is and are not popularity-multiplied.",
+    },
+    structure_bonus_tunnel_with_structures: {
+      1: "Count structures on tunnel hexes only.",
+      2: "Use the active structure bonus tile and award only its matching pattern.",
+      3: "Structure bonus coins are added as-is and are not popularity-multiplied.",
+    },
+    structure_bonus_longest_structure_row: {
+      1: "Find the longest connected structure row first.",
+      2: "Use the active structure bonus tile and award only its matching pattern.",
+      3: "Structure bonus coins are added as-is and are not popularity-multiplied.",
+    },
+    structure_bonus_tunnel_adjacent: {
+      1: "Count structures adjacent to tunnel hexes only.",
+      2: "Use the active structure bonus tile and award only its matching pattern.",
+      3: "Structure bonus coins are added as-is and are not popularity-multiplied.",
+    },
+    structure_bonus_encounter_adjacent: {
+      1: "Count structures adjacent to encounter hexes only.",
+      2: "Use the active structure bonus tile and award only its matching pattern.",
+      3: "Structure bonus coins are added as-is and are not popularity-multiplied.",
+    },
+    structure_bonus_lake_adjacent: {
+      1: "Count structures adjacent to lakes only.",
+      2: "Use the active structure bonus tile and award only its matching pattern.",
+      3: "Structure bonus coins are added as-is and are not popularity-multiplied.",
     },
     total_scoring: {
       1: "Add all components exactly once.",
@@ -375,7 +400,7 @@ export async function submitSubtypeTutorAttempt(formData: FormData) {
   const scenarioCandidate = await getTemporaryScenarioById(scenarioId);
   const scenario = scenarioCandidate && scenarioCandidate.playerCount === requiredPlayerCount
     ? scenarioCandidate
-    : await getTemporaryScenarioForPlayerCount(user.id, requiredPlayerCount);
+    : await getTemporaryScenarioForPlayerCount(user.id, requiredPlayerCount, subtypeId);
 
   let isCorrect = false;
   let summary = "";
@@ -410,7 +435,12 @@ export async function submitSubtypeTutorAttempt(formData: FormData) {
         stars_scoring: full.points.stars,
         territories_scoring: full.points.territories,
         resources_scoring: full.points.resources,
-        structure_bonus_scoring: full.points.structureBonus,
+        structure_bonus_farm_or_tundra: full.points.structureBonus,
+        structure_bonus_tunnel_with_structures: full.points.structureBonus,
+        structure_bonus_longest_structure_row: full.points.structureBonus,
+        structure_bonus_tunnel_adjacent: full.points.structureBonus,
+        structure_bonus_encounter_adjacent: full.points.structureBonus,
+        structure_bonus_lake_adjacent: full.points.structureBonus,
         total_scoring: full.points.total,
       };
 
@@ -422,7 +452,12 @@ export async function submitSubtypeTutorAttempt(formData: FormData) {
         stars_scoring: "stars",
         territories_scoring: "territories",
         resources_scoring: "resources",
-        structure_bonus_scoring: "structureBonus",
+        structure_bonus_farm_or_tundra: "structureBonus",
+        structure_bonus_tunnel_with_structures: "structureBonus",
+        structure_bonus_longest_structure_row: "structureBonus",
+        structure_bonus_tunnel_adjacent: "structureBonus",
+        structure_bonus_encounter_adjacent: "structureBonus",
+        structure_bonus_lake_adjacent: "structureBonus",
         total_scoring: "total",
       };
       const activeField = fieldBySubtype[subtypeId as Exclude<SubtypeId, "popularity_tiers" | "winner_tiebreakers">];

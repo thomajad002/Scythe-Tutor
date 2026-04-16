@@ -445,6 +445,18 @@ function filterBySubtype(scenarios: TemporaryScenario[], subtypeId?: string): Te
         return scenario.players.some((p) => p.territories > 0 || p.factoryControlled);
       case "resources_scoring":
         return scenario.players.some((p) => p.resources > 0);
+      case "structure_bonus_farm_or_tundra":
+        return scenario.id.includes("farm_or_tundra_structures");
+      case "structure_bonus_tunnel_with_structures":
+        return scenario.id.includes("tunnel_with_structures");
+      case "structure_bonus_longest_structure_row":
+        return scenario.id.includes("longest_structure_row");
+      case "structure_bonus_tunnel_adjacent":
+        return scenario.id.includes("tunnel_adjacent");
+      case "structure_bonus_encounter_adjacent":
+        return scenario.id.includes("encounter_adjacent");
+      case "structure_bonus_lake_adjacent":
+        return scenario.id.includes("lake_adjacent");
       case "structure_bonus_scoring":
         return scenario.players.some((p) => (p.structureBonusCoins ?? 0) > 0);
       case "total_scoring":
@@ -455,6 +467,39 @@ function filterBySubtype(scenarios: TemporaryScenario[], subtypeId?: string): Te
         return true;
     }
   });
+}
+
+function preferMidStarScenarios(scenarios: TemporaryScenario[], subtypeId?: string): TemporaryScenario[] {
+  if (!subtypeId) {
+    return scenarios;
+  }
+
+  const needsRicherBoards = new Set([
+    "territories_scoring",
+    "resources_scoring",
+    "structure_bonus_farm_or_tundra",
+    "structure_bonus_tunnel_with_structures",
+    "structure_bonus_longest_structure_row",
+    "structure_bonus_tunnel_adjacent",
+    "structure_bonus_encounter_adjacent",
+    "structure_bonus_lake_adjacent",
+    "total_scoring",
+  ]);
+
+  if (!needsRicherBoards.has(subtypeId)) {
+    return scenarios;
+  }
+
+  const preferred = scenarios.filter((scenario) => {
+    if (scenario.playerCount !== 1) {
+      return false;
+    }
+
+    const focusPlayer = scenario.players[0];
+    return Boolean(focusPlayer && focusPlayer.stars >= 4 && focusPlayer.stars <= 6);
+  });
+
+  return preferred.length > 0 ? preferred : scenarios;
 }
 
 function tokenPathForFactionPiece(
@@ -514,60 +559,65 @@ export const getScenarioBank = cache(async (): Promise<TemporaryScenario[]> => {
 
     for (let playerCount = 1; playerCount <= Math.min(5, sorted.length); playerCount += 1) {
       const rawPlayersByFaction = new Map(playersWithScoring.map((entry) => [entry.rawPlayer.faction, entry.rawPlayer] as const));
-      const selectedPlayers = sorted.slice(0, playerCount).map((player, index) => {
-        const rawPlayer = rawPlayersByFaction.get(player.faction);
-        const controlledHexIds = rawPlayer ? controlledHexIdsForPlayer(rawPlayer, playerCount) : [];
+      const selectionGroups = playerCount === 1
+        ? sorted.map((candidate) => [candidate])
+        : [sorted.slice(0, playerCount)];
 
-        return {
-          ...player,
-          playerId: `p${index + 1}`,
-          displayName: `${player.faction} (${index + 1})`,
-          territories: controlledHexIds.length,
-          factoryControlled: controlledHexIds.includes(FACTORY_HEX_ID),
-        };
-      });
+      for (const selectedGroup of selectionGroups) {
+        const selectedPlayers = selectedGroup.map((player, index) => {
+          const rawPlayer = rawPlayersByFaction.get(player.faction);
+          const controlledHexIds = rawPlayer ? controlledHexIdsForPlayer(rawPlayer, playerCount) : [];
 
-      const selectedFactions = new Set(selectedPlayers.map((p) => p.faction));
-      const selectedRawPlayers = playersWithScoring
-        .filter((entry) => selectedFactions.has(entry.converted.faction))
-        .map((entry) => entry.rawPlayer);
-
-      const starSlotsByFaction = new Map<RawScenarioPlayer["faction"], ReturnType<typeof resolveStarSlots>>();
-      const starSlotDemand = new Map<number, number>();
-      selectedRawPlayers.forEach((rawPlayer) => {
-        const slotsForPlayer = resolveStarSlots(rawPlayer.stars, starSlots);
-        starSlotsByFaction.set(rawPlayer.faction, slotsForPlayer);
-        slotsForPlayer.forEach((slot) => {
-          starSlotDemand.set(slot.index, (starSlotDemand.get(slot.index) ?? 0) + 1);
+          return {
+            ...player,
+            playerId: `p${index + 1}`,
+            displayName: `${player.faction} (${index + 1})`,
+            territories: controlledHexIds.length,
+            factoryControlled: controlledHexIds.includes(FACTORY_HEX_ID),
+          };
         });
-      });
 
-      const placements: PiecePlacement[] = [];
-      const occupied: PlacementAnchor[] = [];
-      const starAnchors: PlacementAnchor[] = [];
-      const starAnchorsBySlot = new Map<number, PlacementAnchor[]>();
+        const selectedFactions = new Set(selectedPlayers.map((p) => p.faction));
+        const selectedRawPlayers = playersWithScoring
+          .filter((entry) => selectedFactions.has(entry.converted.faction))
+          .map((entry) => entry.rawPlayer);
 
-      const structureBonusMarker = board.boardMarkers?.structureBonus;
-      if (structureBonusMarker) {
-        const structureBonusBox = boxFromPoints(structureBonusMarker.points);
-        placements.push({
-          id: `${raw.scenarioId}-${playerCount}-sb`,
-          playerId: "board",
-          kind: "structure_bonus",
-          tokenPath: STRUCTURE_BONUS_PATH[raw.structureBonus] ?? "/assets/tokens/structure-bonus/sb_mine_adj.webp",
-          x: structureBonusBox.center.x,
-          y: structureBonusBox.center.y,
-          boxWidthPercent: structureBonusBox.widthPercent,
-          boxHeightPercent: structureBonusBox.heightPercent,
-          boxRotationDeg: structureBonusMarker.rotationDegrees ?? 0,
+        const starSlotsByFaction = new Map<RawScenarioPlayer["faction"], ReturnType<typeof resolveStarSlots>>();
+        const starSlotDemand = new Map<number, number>();
+        selectedRawPlayers.forEach((rawPlayer) => {
+          const slotsForPlayer = resolveStarSlots(rawPlayer.stars, starSlots);
+          starSlotsByFaction.set(rawPlayer.faction, slotsForPlayer);
+          slotsForPlayer.forEach((slot) => {
+            starSlotDemand.set(slot.index, (starSlotDemand.get(slot.index) ?? 0) + 1);
+          });
         });
-        occupied.push({
-          point: structureBonusBox.center,
-          radius: boxOccupancyRadius(structureBonusBox.widthPercent, structureBonusBox.heightPercent),
-        });
-      }
 
-      selectedRawPlayers.forEach((rawPlayer) => {
+        const placements: PiecePlacement[] = [];
+        const occupied: PlacementAnchor[] = [];
+        const starAnchors: PlacementAnchor[] = [];
+        const starAnchorsBySlot = new Map<number, PlacementAnchor[]>();
+
+        const structureBonusMarker = board.boardMarkers?.structureBonus;
+        if (structureBonusMarker) {
+          const structureBonusBox = boxFromPoints(structureBonusMarker.points);
+          placements.push({
+            id: `${raw.scenarioId}-${playerCount}-sb`,
+            playerId: "board",
+            kind: "structure_bonus",
+            tokenPath: STRUCTURE_BONUS_PATH[raw.structureBonus] ?? "/assets/tokens/structure-bonus/sb_mine_adj.webp",
+            x: structureBonusBox.center.x,
+            y: structureBonusBox.center.y,
+            boxWidthPercent: structureBonusBox.widthPercent,
+            boxHeightPercent: structureBonusBox.heightPercent,
+            boxRotationDeg: structureBonusMarker.rotationDegrees ?? 0,
+          });
+          occupied.push({
+            point: structureBonusBox.center,
+            radius: boxOccupancyRadius(structureBonusBox.widthPercent, structureBonusBox.heightPercent),
+          });
+        }
+
+        selectedRawPlayers.forEach((rawPlayer) => {
         const normalizedPlayer = selectedPlayers.find((p) => p.faction === rawPlayer.faction);
         if (!normalizedPlayer) return;
 
@@ -765,9 +815,9 @@ export const getScenarioBank = cache(async (): Promise<TemporaryScenario[]> => {
           starAnchorsBySlot.set(starSlot.index, perSlotAnchors);
           occupied.push({ point, radius: baseStarRadius });
         }
-      });
+        });
 
-      raw.resourcesByHex.forEach((entry, entryIndex) => {
+        raw.resourcesByHex.forEach((entry, entryIndex) => {
         const points = hexPoints.get(entry.hexId);
         const box = hexBoxes.get(entry.hexId);
         if (!box || !points) return;
@@ -796,17 +846,19 @@ export const getScenarioBank = cache(async (): Promise<TemporaryScenario[]> => {
             occupied.push({ point, radius: boxOccupancyRadius(box.widthPercent, box.heightPercent) });
           }
         });
-      });
+        });
 
-      scenarios.push({
-        id: `scythe-${raw.scenarioId}-${playerCount}p`,
-        playerCount,
-        boardImagePath: `/assets/boards/${board.image.name}`,
-        boardImageWidth: board.image.width,
-        boardImageHeight: board.image.height,
-        piecePlacements: placements,
-        players: selectedPlayers,
-      });
+        const focusKey = selectedPlayers.map((player) => player.faction).join("-");
+        scenarios.push({
+          id: `scythe-${raw.scenarioId}-${playerCount}p-${focusKey}`,
+          playerCount,
+          boardImagePath: `/assets/boards/${board.image.name}`,
+          boardImageWidth: board.image.width,
+          boardImageHeight: board.image.height,
+          piecePlacements: placements,
+          players: selectedPlayers,
+        });
+      }
     }
   }
 
@@ -826,7 +878,8 @@ export async function getTemporaryScenarioForPlayerCount(
   const bank = await getScenarioBank();
   const byCount = bank.filter((scenario) => scenario.playerCount === playerCount);
   const filtered = filterBySubtype(byCount, subtypeId);
-  const source = filtered.length > 0 ? filtered : byCount;
+  const sourceBase = filtered.length > 0 ? filtered : byCount;
+  const source = preferMidStarScenarios(sourceBase, subtypeId);
 
   if (source.length === 0) {
     throw new Error(`No scenarios found for ${playerCount} players`);

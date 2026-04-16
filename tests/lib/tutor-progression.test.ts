@@ -45,20 +45,25 @@ describe("evaluateSubtypeMastery", () => {
 });
 
 describe("unlock model", () => {
-  it("keeps total scoring and winner locked until the first five are mastered", () => {
+  it("keeps total scoring and winner locked until all pre-final sections are mastered", () => {
     expect(isSubtypeUnlocked("total_scoring", INITIAL_PROGRESS_STATE.subtypeMastery)).toBe(false);
     expect(isSubtypeUnlocked("winner_tiebreakers", INITIAL_PROGRESS_STATE.subtypeMastery)).toBe(false);
 
-    const firstFiveMastered = {
+    const preFinalMastered = {
       popularity_tiers: true,
       stars_scoring: true,
       territories_scoring: true,
       resources_scoring: true,
-      structure_bonus_scoring: true,
+      structure_bonus_farm_or_tundra: true,
+      structure_bonus_tunnel_with_structures: true,
+      structure_bonus_longest_structure_row: true,
+      structure_bonus_tunnel_adjacent: true,
+      structure_bonus_encounter_adjacent: true,
+      structure_bonus_lake_adjacent: true,
     };
 
-    expect(isSubtypeUnlocked("total_scoring", firstFiveMastered)).toBe(true);
-    expect(isSubtypeUnlocked("winner_tiebreakers", firstFiveMastered)).toBe(true);
+    expect(isSubtypeUnlocked("total_scoring", preFinalMastered)).toBe(true);
+    expect(isSubtypeUnlocked("winner_tiebreakers", preFinalMastered)).toBe(true);
   });
 
   it("does not complete tutorial without all gates", () => {
@@ -83,7 +88,12 @@ describe("unlock model", () => {
         stars_scoring: true,
         territories_scoring: true,
         resources_scoring: true,
-        structure_bonus_scoring: true,
+        structure_bonus_farm_or_tundra: true,
+        structure_bonus_tunnel_with_structures: true,
+        structure_bonus_longest_structure_row: true,
+        structure_bonus_tunnel_adjacent: true,
+        structure_bonus_encounter_adjacent: true,
+        structure_bonus_lake_adjacent: true,
         total_scoring: true,
         winner_tiebreakers: true,
       },

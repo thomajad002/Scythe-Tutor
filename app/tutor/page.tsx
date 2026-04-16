@@ -16,6 +16,7 @@ import { getTutorProgressState } from "@/lib/tutor/server";
 import {
   getTemporaryScenarioById,
   getTemporaryScenarioForPlayerCount,
+  type PiecePlacement,
 } from "@/lib/tutor/scenario-bank";
 import { loadScytheBoardData } from "@/lib/scythe/board-data";
 
@@ -24,7 +25,12 @@ const SUBTYPE_LABELS: Record<(typeof SUBTYPE_IDS)[number], string> = {
   stars_scoring: "Stars scoring",
   territories_scoring: "Territories scoring (Factory included)",
   resources_scoring: "Resources scoring (pairs)",
-  structure_bonus_scoring: "Structure bonus tile",
+  structure_bonus_farm_or_tundra: "Structure bonus: farm or tundra",
+  structure_bonus_tunnel_with_structures: "Structure bonus: tunnel with structures",
+  structure_bonus_longest_structure_row: "Structure bonus: longest structure row",
+  structure_bonus_tunnel_adjacent: "Structure bonus: tunnel adjacent",
+  structure_bonus_encounter_adjacent: "Structure bonus: encounter adjacent",
+  structure_bonus_lake_adjacent: "Structure bonus: lake adjacent",
   total_scoring: "Total scoring",
   winner_tiebreakers: "Winner and tiebreakers",
 };
@@ -41,6 +47,15 @@ const STAGE_LABELS: Record<StageId, string> = {
   multiplayer: "3. Multiplayer",
   speed: "4. Speed Challenge",
 };
+
+const STRUCTURE_BONUS_SUBTYPE_IDS = new Set([
+  "structure_bonus_farm_or_tundra",
+  "structure_bonus_tunnel_with_structures",
+  "structure_bonus_longest_structure_row",
+  "structure_bonus_tunnel_adjacent",
+  "structure_bonus_encounter_adjacent",
+  "structure_bonus_lake_adjacent",
+]);
 
 function parseStage(value: string | null): StageId | null {
   if (!value) {
@@ -119,6 +134,124 @@ function getDefaultStage(
   return "speed";
 }
 
+function parseHexId(piece: PiecePlacement): number | null {
+  if (piece.kind === "worker") {
+    const match = piece.id.match(/-worker-(\d+)-/);
+    return match ? Number.parseInt(match[1], 10) : null;
+  }
+
+  if (piece.kind === "mech") {
+    const match = piece.id.match(/-mech-(\d+)(?:-|$)/);
+    return match ? Number.parseInt(match[1], 10) : null;
+  }
+
+  if (piece.kind === "structure") {
+    const match = piece.id.match(/-structure-(\d+)-/);
+    return match ? Number.parseInt(match[1], 10) : null;
+  }
+
+  if (piece.kind === "resource") {
+    const match = piece.id.match(/-resource-(\d+)-/);
+    return match ? Number.parseInt(match[1], 10) : null;
+  }
+
+  return null;
+}
+
+function dedupeByHexForKind(pieces: PiecePlacement[], kind: PiecePlacement["kind"]): PiecePlacement[] {
+  const seenHexes = new Set<number>();
+  const deduped: PiecePlacement[] = [];
+
+  for (const piece of pieces) {
+    if (piece.kind !== kind) {
+      continue;
+    }
+
+    const hexId = parseHexId(piece);
+    if (hexId === null) {
+      deduped.push(piece);
+      continue;
+    }
+
+    if (seenHexes.has(hexId)) {
+      continue;
+    }
+
+    seenHexes.add(hexId);
+    deduped.push(piece);
+  }
+
+  return deduped;
+}
+
+function filterSubtypePlacements(
+  subtypeId: (typeof SUBTYPE_IDS)[number],
+  placements: PiecePlacement[],
+  focusPlayerId: string,
+): PiecePlacement[] {
+  const playerPieces = placements.filter((piece) => piece.playerId === focusPlayerId);
+  const boardPieces = placements.filter((piece) => piece.playerId === "board");
+
+  const popularity = playerPieces.filter((piece) => piece.kind === "popularity");
+  const stars = playerPieces.filter((piece) => piece.kind === "star");
+  const characters = playerPieces.filter((piece) => piece.kind === "character");
+  const structures = playerPieces.filter((piece) => piece.kind === "structure");
+  const mechsByHex = dedupeByHexForKind(playerPieces, "mech");
+  const workersByHex = dedupeByHexForKind(playerPieces, "worker");
+
+  if (subtypeId === "popularity_tiers") {
+    return popularity;
+  }
+
+  if (subtypeId === "stars_scoring") {
+    return [...popularity, ...stars];
+  }
+
+  if (subtypeId === "territories_scoring") {
+    return [...popularity, ...characters, ...mechsByHex, ...workersByHex, ...structures];
+  }
+
+  if (subtypeId === "resources_scoring") {
+    const relevantHexes = new Set<number>();
+    for (const piece of [...mechsByHex, ...workersByHex, ...structures]) {
+      const hexId = parseHexId(piece);
+      if (hexId !== null) {
+        relevantHexes.add(hexId);
+      }
+    }
+
+    const relevantResources = boardPieces.filter((piece) => {
+      if (piece.kind !== "resource") {
+        return false;
+      }
+
+      const hexId = parseHexId(piece);
+      return hexId !== null && relevantHexes.has(hexId);
+    });
+
+    return [...popularity, ...characters, ...mechsByHex, ...workersByHex, ...structures, ...relevantResources];
+  }
+
+  if (
+    subtypeId === "structure_bonus_farm_or_tundra"
+    || subtypeId === "structure_bonus_tunnel_with_structures"
+    || subtypeId === "structure_bonus_longest_structure_row"
+    || subtypeId === "structure_bonus_tunnel_adjacent"
+    || subtypeId === "structure_bonus_encounter_adjacent"
+    || subtypeId === "structure_bonus_lake_adjacent"
+  ) {
+    const structureBonusTile = boardPieces.filter((piece) => piece.kind === "structure_bonus");
+    return [...structures, ...structureBonusTile];
+  }
+
+  if (subtypeId === "total_scoring") {
+    const playerWithoutPower = playerPieces.filter((piece) => piece.kind !== "strength" && piece.kind !== "worker");
+    return [...playerWithoutPower, ...workersByHex, ...boardPieces];
+  }
+
+  return placements;
+}
+
 export default async function TutorPage({ searchParams }: TutorPageProps) {
   const user = await requireUser();
   const boardGeometry = await loadScytheBoardData();
@@ -152,7 +285,11 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
     : activeMultiplayerTarget;
 
   const subtypePlayerCount = activeSubtype === "winner_tiebreakers" ? 2 : 1;
-  const fallbackSubtypeScenario = await getTemporaryScenarioForPlayerCount(user.id, subtypePlayerCount);
+  const fallbackSubtypeScenario = await getTemporaryScenarioForPlayerCount(
+    user.id,
+    subtypePlayerCount,
+    activeSubtype,
+  );
   const subtypeScenarioCandidate = requestedScenarioId
     ? await getTemporaryScenarioById(requestedScenarioId)
     : null;
@@ -200,6 +337,22 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
       active: activeSubtype === subtypeId,
     };
   });
+  const coreSubtypeRailItems = subtypeRailItems.filter((item) => !STRUCTURE_BONUS_SUBTYPE_IDS.has(item.subtypeId));
+  const structureBonusRailItems = subtypeRailItems.filter((item) => STRUCTURE_BONUS_SUBTYPE_IDS.has(item.subtypeId));
+  const structureBonusActive = structureBonusRailItems.some((item) => item.active);
+  const structureBonusComplete = structureBonusRailItems.every((item) => item.mastered);
+  const resourcesCoreIndex = coreSubtypeRailItems.findIndex((item) => item.subtypeId === "resources_scoring");
+  const coreItemsBeforeStructure = resourcesCoreIndex >= 0
+    ? coreSubtypeRailItems.slice(0, resourcesCoreIndex + 1)
+    : coreSubtypeRailItems;
+  const coreItemsAfterStructure = resourcesCoreIndex >= 0
+    ? coreSubtypeRailItems.slice(resourcesCoreIndex + 1)
+    : [];
+  const subtypeBoardPlacements = filterSubtypePlacements(
+    activeSubtype,
+    subtypeScenario.piecePlacements,
+    subtypeScenario.players[0]?.playerId ?? "p1",
+  );
   const activeSubtypeMastered = progress.subtypeMastery[activeSubtype] === true;
   const moveOnSubtype = SUBTYPE_IDS.find((subtypeId) => !progress.subtypeMastery[subtypeId] && subtypeId !== activeSubtype)
     ?? nextSubtype;
@@ -227,7 +380,7 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                 boardImagePath={subtypeScenario.boardImagePath}
                 boardImageWidth={subtypeScenario.boardImageWidth}
                 boardImageHeight={subtypeScenario.boardImageHeight}
-                piecePlacements={subtypeScenario.piecePlacements}
+                piecePlacements={subtypeBoardPlacements}
                 boardGeometry={boardGeometry}
                 showDebugBorders
                 className="w-full"
@@ -484,10 +637,80 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                   <span className="block text-center font-medium text-foreground">{masteredAllSubtypes ? "Complete" : `${masteredCount} complete`}</span>
                 </summary>
                 <p className="mt-2 text-xs text-muted">
-                  The first five stay open in any order. The last two unlock after they are complete.
+                  Core and structure-bonus tile sections stay open together. Total scoring and winner unlock after all prior sections are mastered.
                 </p>
                 <div className="mt-3 space-y-2">
-                  {subtypeRailItems.map((item) => (
+                  {coreItemsBeforeStructure.map((item) => (
+                    <form key={item.subtypeId} method="get" action="/tutor">
+                      <input type="hidden" name="stage" value="subtype" />
+                      <input type="hidden" name="subtype" value={item.subtypeId} />
+                      <button
+                        type="submit"
+                        disabled={item.locked}
+                        className={`w-full rounded-2xl border px-3 py-3 text-left transition-colors ${
+                          item.active
+                            ? "border-accent bg-accent/15 text-foreground"
+                            : item.locked
+                              ? "border-border/40 bg-surface-2/50 text-muted"
+                              : item.mastered
+                                ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-100"
+                                : "border-border bg-surface-2 text-foreground hover:bg-surface-3"
+                        }`}
+                      >
+                        <span className="block text-sm font-medium">{SUBTYPE_LABELS[item.subtypeId]}</span>
+                        <span className="mt-1 block text-[11px] uppercase tracking-[0.16em] text-current/70">
+                          {item.locked ? "Locked" : item.mastered ? "Mastered" : "In progress"}
+                        </span>
+                      </button>
+                    </form>
+                  ))}
+
+                  <details className="space-y-2" open={structureBonusActive}>
+                    <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+                      <div
+                        className={`w-full rounded-2xl border px-3 py-3 text-left transition-colors ${
+                          structureBonusActive
+                            ? "border-accent bg-accent/15 text-foreground"
+                            : structureBonusComplete
+                              ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-100"
+                              : "border-border bg-surface-2 text-foreground hover:bg-surface-3"
+                        }`}
+                      >
+                        <span className="block text-sm font-medium">Structure bonus</span>
+                        <span className="mt-1 block text-[11px] uppercase tracking-[0.16em] text-current/70">
+                          {structureBonusComplete ? "Mastered" : "In progress"}
+                        </span>
+                      </div>
+                    </summary>
+                    <div className="mt-2 space-y-2">
+                      {structureBonusRailItems.map((item) => (
+                        <form key={item.subtypeId} method="get" action="/tutor">
+                          <input type="hidden" name="stage" value="subtype" />
+                          <input type="hidden" name="subtype" value={item.subtypeId} />
+                          <button
+                            type="submit"
+                            disabled={item.locked}
+                            className={`w-full rounded-2xl border px-3 py-3 text-left transition-colors ${
+                              item.active
+                                ? "border-accent bg-accent/15 text-foreground"
+                                : item.locked
+                                  ? "border-border/40 bg-surface-2/50 text-muted"
+                                  : item.mastered
+                                    ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-100"
+                                    : "border-border bg-surface-2 text-foreground hover:bg-surface-3"
+                            }`}
+                          >
+                            <span className="block text-sm font-medium">{SUBTYPE_LABELS[item.subtypeId]}</span>
+                            <span className="mt-1 block text-[11px] uppercase tracking-[0.16em] text-current/70">
+                              {item.locked ? "Locked" : item.mastered ? "Mastered" : "In progress"}
+                            </span>
+                          </button>
+                        </form>
+                      ))}
+                    </div>
+                  </details>
+
+                  {coreItemsAfterStructure.map((item) => (
                     <form key={item.subtypeId} method="get" action="/tutor">
                       <input type="hidden" name="stage" value="subtype" />
                       <input type="hidden" name="subtype" value={item.subtypeId} />

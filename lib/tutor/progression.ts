@@ -3,14 +3,19 @@ export const SUBTYPE_IDS = [
   "stars_scoring",
   "territories_scoring",
   "resources_scoring",
-  "structure_bonus_scoring",
+  "structure_bonus_farm_or_tundra",
+  "structure_bonus_tunnel_with_structures",
+  "structure_bonus_longest_structure_row",
+  "structure_bonus_tunnel_adjacent",
+  "structure_bonus_encounter_adjacent",
+  "structure_bonus_lake_adjacent",
   "total_scoring",
   "winner_tiebreakers",
 ] as const;
 
 export type SubtypeId = (typeof SUBTYPE_IDS)[number];
 
-const PRIMARY_SUBTYPE_COUNT = 5;
+const PRIMARY_SUBTYPE_COUNT = SUBTYPE_IDS.length - 2;
 
 export type SubtypeAttempt = {
   subtypeId: SubtypeId;
