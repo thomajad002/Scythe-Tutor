@@ -5,6 +5,11 @@ import type { MultiplayerScoringPlayerInput } from "@/lib/scythe/scoring";
 
 type HexPoint = { x: number; y: number };
 
+type PlacementAnchor = {
+  point: HexPoint;
+  radius: number;
+};
+
 type RawScenarioPlayer = {
   faction: "saxony" | "rusviet" | "nordic" | "crimea" | "polania";
   stars: Record<string, number>;
@@ -63,6 +68,12 @@ export type PiecePlacement = {
   tokenPath: string;
   x: number;
   y: number;
+  boxWidthPercent?: number;
+  boxHeightPercent?: number;
+  boxRotationDeg?: number;
+  tokenScalePercent?: number;
+  tokenWidthPercent?: number;
+  tokenHeightPercent?: number;
   sizePercent?: number;
   stackCount?: number;
   rotationDeg?: number;
@@ -118,17 +129,172 @@ function hashString(input: string): number {
   return Math.abs(hash);
 }
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function starTokenDimensions(seed: string): { widthPercent: number; heightPercent: number } {
+  const hash = hashString(seed);
+  const widthPercent = clamp(52 + (hash % 5) * 2, 50, 62);
+  const heightPercent = clamp(50 + ((hash >> 3) % 5) * 2, 48, 60);
+  return { widthPercent, heightPercent };
+}
+
 function sumStars(stars: Record<string, number>): number {
   return Object.values(stars).reduce((sum, value) => sum + value, 0);
 }
 
-function normalizePoint(center: HexPoint, playerIndex: number, lane: number): HexPoint {
-  const dx = ((playerIndex % 3) - 1) * 0.008 + lane * 0.004;
-  const dy = (Math.floor(playerIndex / 3) - 1) * 0.007 + lane * 0.003;
+function pointInPolygon(point: HexPoint, polygon: HexPoint[]): boolean {
+  let inside = false;
+
+  for (let current = 0, previous = polygon.length - 1; current < polygon.length; previous = current, current += 1) {
+    const currentPoint = polygon[current];
+    const previousPoint = polygon[previous];
+    const intersects =
+      currentPoint.y > point.y !== previousPoint.y > point.y
+      && point.x < ((previousPoint.x - currentPoint.x) * (point.y - currentPoint.y)) / ((previousPoint.y - currentPoint.y) || Number.EPSILON) + currentPoint.x;
+
+    if (intersects) {
+      inside = !inside;
+    }
+  }
+
+  return inside;
+}
+
+function polygonBounds(points: HexPoint[]): { minX: number; maxX: number; minY: number; maxY: number } {
   return {
-    x: Math.max(0, Math.min(1, center.x + dx)),
-    y: Math.max(0, Math.min(1, center.y + dy)),
+    minX: Math.min(...points.map((point) => point.x)),
+    maxX: Math.max(...points.map((point) => point.x)),
+    minY: Math.min(...points.map((point) => point.y)),
+    maxY: Math.max(...points.map((point) => point.y)),
   };
+}
+
+function polygonBox(points: HexPoint[]): { center: HexPoint; width: number; height: number } {
+  const bounds = polygonBounds(points);
+  return {
+    center: {
+      x: (bounds.minX + bounds.maxX) / 2,
+      y: (bounds.minY + bounds.maxY) / 2,
+    },
+    width: bounds.maxX - bounds.minX,
+    height: bounds.maxY - bounds.minY,
+  };
+}
+
+function distance(a: HexPoint, b: HexPoint): number {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+function mulberry32(seed: number): () => number {
+  let value = seed;
+
+  return () => {
+    value |= 0;
+    value = (value + 0x6d2b79f5) | 0;
+    let result = Math.imul(value ^ (value >>> 15), 1 | value);
+    result = (result + Math.imul(result ^ (result >>> 7), 61 | result)) ^ result;
+    return ((result ^ (result >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function samplePointInPolygon(points: HexPoint[], seedKey: string, preferBottom = false): HexPoint {
+  if (points.length === 0) {
+    return { x: 0.5, y: 0.5 };
+  }
+
+  const rng = mulberry32(hashString(seedKey));
+  const bounds = polygonBounds(points);
+
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    const x = bounds.minX + rng() * (bounds.maxX - bounds.minX);
+    const yBias = preferBottom ? 0.62 + rng() * 0.34 : 0.15 + rng() * 0.7;
+    const y = bounds.minY + ((bounds.maxY - bounds.minY) * yBias);
+    const candidate = {
+      x: Math.max(0, Math.min(1, x)),
+      y: Math.max(0, Math.min(1, y)),
+    };
+
+    if (pointInPolygon(candidate, points)) {
+      return candidate;
+    }
+  }
+
+  const center = points.reduce(
+    (acc, point) => ({ x: acc.x + point.x, y: acc.y + point.y }),
+    { x: 0, y: 0 },
+  );
+  return {
+    x: center.x / points.length,
+    y: center.y / points.length,
+  };
+}
+
+function samplePointInPolygonAvoiding(
+  points: HexPoint[],
+  seedKey: string,
+  occupied: PlacementAnchor[],
+  radius: number,
+  preferBottom = false,
+): HexPoint {
+  if (points.length === 0) {
+    return { x: 0.5, y: 0.5 };
+  }
+
+  const rng = mulberry32(hashString(seedKey));
+  const bounds = polygonBounds(points);
+  let bestCandidate: HexPoint | null = null;
+  let bestScore = -Infinity;
+
+  for (let attempt = 0; attempt < 160; attempt += 1) {
+    const x = bounds.minX + rng() * (bounds.maxX - bounds.minX);
+    const yBias = preferBottom ? 0.62 + rng() * 0.34 : 0.18 + rng() * 0.64;
+    const y = bounds.minY + ((bounds.maxY - bounds.minY) * yBias);
+    const candidate = {
+      x: Math.max(0, Math.min(1, x)),
+      y: Math.max(0, Math.min(1, y)),
+    };
+
+    if (!pointInPolygon(candidate, points)) {
+      continue;
+    }
+
+    const minDistance = occupied.reduce((best, item) => {
+      const separation = distance(candidate, item.point) - (radius + item.radius);
+      return Math.min(best, separation);
+    }, Number.POSITIVE_INFINITY);
+
+    const score = Number.isFinite(minDistance) ? minDistance : 0;
+    if (score > bestScore) {
+      bestScore = score;
+      bestCandidate = candidate;
+      if (score >= 0.0025) {
+        break;
+      }
+    }
+  }
+
+  if (bestCandidate) {
+    return bestCandidate;
+  }
+
+  return samplePointInPolygon(points, `${seedKey}-fallback`, preferBottom);
+}
+
+function boxFromPoints(points: HexPoint[]): { center: HexPoint; widthPercent: number; heightPercent: number } {
+  const box = polygonBox(points);
+  return {
+    center: box.center,
+    widthPercent: box.width,
+    heightPercent: box.height,
+  };
+}
+
+function boxOccupancyRadius(widthPercent: number, heightPercent: number): number {
+  return Math.max(0.004, Math.min(widthPercent, heightPercent) * 0.35);
 }
 
 function countByHex(hexIds: number[]): Array<{ hexId: number; count: number }> {
@@ -222,13 +388,11 @@ export const getScenarioBank = cache(async (): Promise<TemporaryScenario[]> => {
   const board = await loadScytheBoardData();
   const rawScenarios = (scenariosData as unknown as { scenarios: RawScenario[] }).scenarios;
 
-  const hexCenters = new Map<number, HexPoint>();
+  const hexBoxes = new Map<number, { center: HexPoint; widthPercent: number; heightPercent: number }>();
+  const hexPoints = new Map<number, HexPoint[]>();
   for (const hex of board.hexes) {
-    const center = hex.points.reduce(
-      (acc, point) => ({ x: acc.x + point.x, y: acc.y + point.y }),
-      { x: 0, y: 0 },
-    );
-    hexCenters.set(hex.id, { x: center.x / hex.points.length, y: center.y / hex.points.length });
+    hexBoxes.set(hex.id, boxFromPoints(hex.points));
+    hexPoints.set(hex.id, hex.points);
   }
 
   const popularitySlots = board.boardMarkers?.popularityTrack?.slots ?? [];
@@ -265,30 +429,43 @@ export const getScenarioBank = cache(async (): Promise<TemporaryScenario[]> => {
         .map((entry) => entry.rawPlayer);
 
       const placements: PiecePlacement[] = [];
+      const occupied: PlacementAnchor[] = [];
 
-      const structureBonusCenter = board.boardMarkers?.structureBonus?.center;
-      if (structureBonusCenter) {
+      const structureBonusMarker = board.boardMarkers?.structureBonus;
+      if (structureBonusMarker) {
+        const structureBonusBox = boxFromPoints(structureBonusMarker.points);
         placements.push({
           id: `${raw.scenarioId}-${playerCount}-sb`,
           playerId: "board",
           kind: "structure_bonus",
           tokenPath: STRUCTURE_BONUS_PATH[raw.structureBonus] ?? "/assets/tokens/structure-bonus/sb_mine_adj.webp",
-          x: structureBonusCenter.x,
-          y: structureBonusCenter.y,
-          sizePercent: 4.2,
-          rotationDeg: board.boardMarkers?.structureBonus?.rotationDegrees ?? 0,
+          x: structureBonusBox.center.x,
+          y: structureBonusBox.center.y,
+          boxWidthPercent: structureBonusBox.widthPercent,
+          boxHeightPercent: structureBonusBox.heightPercent,
+          boxRotationDeg: structureBonusMarker.rotationDegrees ?? 0,
+        });
+        occupied.push({
+          point: structureBonusBox.center,
+          radius: boxOccupancyRadius(structureBonusBox.widthPercent, structureBonusBox.heightPercent),
         });
       }
 
-      selectedRawPlayers.forEach((rawPlayer, playerIndex) => {
+      selectedRawPlayers.forEach((rawPlayer) => {
         const normalizedPlayer = selectedPlayers.find((p) => p.faction === rawPlayer.faction);
         if (!normalizedPlayer) return;
 
         const workerStacks = countByHex(rawPlayer.workerHexIds);
         for (const stack of workerStacks) {
-          const center = hexCenters.get(stack.hexId);
-          if (!center) continue;
-          const point = normalizePoint(center, playerIndex, -1);
+          const points = hexPoints.get(stack.hexId);
+          const box = hexBoxes.get(stack.hexId);
+          if (!box || !points) continue;
+          const point = samplePointInPolygonAvoiding(
+            points,
+            `${raw.scenarioId}-${normalizedPlayer.playerId}-worker-${stack.hexId}`,
+            occupied,
+            boxOccupancyRadius(box.widthPercent, box.heightPercent),
+          );
           placements.push({
             id: `${raw.scenarioId}-${normalizedPlayer.playerId}-worker-${stack.hexId}`,
             playerId: normalizedPlayer.playerId,
@@ -297,14 +474,23 @@ export const getScenarioBank = cache(async (): Promise<TemporaryScenario[]> => {
             x: point.x,
             y: point.y,
             stackCount: stack.count,
+            boxWidthPercent: box.widthPercent,
+            boxHeightPercent: box.heightPercent,
           });
+          occupied.push({ point, radius: boxOccupancyRadius(box.widthPercent, box.heightPercent) });
         }
 
         const mechStacks = countByHex(rawPlayer.mechHexIds);
         for (const stack of mechStacks) {
-          const center = hexCenters.get(stack.hexId);
-          if (!center) continue;
-          const point = normalizePoint(center, playerIndex, 0);
+          const points = hexPoints.get(stack.hexId);
+          const box = hexBoxes.get(stack.hexId);
+          if (!box || !points) continue;
+          const point = samplePointInPolygonAvoiding(
+            points,
+            `${raw.scenarioId}-${normalizedPlayer.playerId}-mech-${stack.hexId}`,
+            occupied,
+            boxOccupancyRadius(box.widthPercent, box.heightPercent),
+          );
           placements.push({
             id: `${raw.scenarioId}-${normalizedPlayer.playerId}-mech-${stack.hexId}`,
             playerId: normalizedPlayer.playerId,
@@ -313,12 +499,21 @@ export const getScenarioBank = cache(async (): Promise<TemporaryScenario[]> => {
             x: point.x,
             y: point.y,
             stackCount: stack.count,
+            boxWidthPercent: box.widthPercent,
+            boxHeightPercent: box.heightPercent,
           });
+          occupied.push({ point, radius: boxOccupancyRadius(box.widthPercent, box.heightPercent) });
         }
 
-        const characterCenter = hexCenters.get(rawPlayer.characterHexId);
-        if (characterCenter) {
-          const point = normalizePoint(characterCenter, playerIndex, 1);
+        const characterPoints = hexPoints.get(rawPlayer.characterHexId);
+        const characterBox = hexBoxes.get(rawPlayer.characterHexId);
+        if (characterBox && characterPoints) {
+          const point = samplePointInPolygonAvoiding(
+            characterPoints,
+            `${raw.scenarioId}-${normalizedPlayer.playerId}-character`,
+            occupied,
+            boxOccupancyRadius(characterBox.widthPercent, characterBox.heightPercent),
+          );
           placements.push({
             id: `${raw.scenarioId}-${normalizedPlayer.playerId}-character`,
             playerId: normalizedPlayer.playerId,
@@ -326,13 +521,22 @@ export const getScenarioBank = cache(async (): Promise<TemporaryScenario[]> => {
             tokenPath: tokenPathForFactionPiece(rawPlayer.faction, "character"),
             x: point.x,
             y: point.y,
+            boxWidthPercent: characterBox.widthPercent,
+            boxHeightPercent: characterBox.heightPercent,
           });
+          occupied.push({ point, radius: boxOccupancyRadius(characterBox.widthPercent, characterBox.heightPercent) });
         }
 
-        rawPlayer.structures.forEach((structure, structureIndex) => {
-          const center = hexCenters.get(structure.hexId);
-          if (!center) return;
-          const point = normalizePoint(center, playerIndex, 2 + structureIndex);
+        rawPlayer.structures.forEach((structure) => {
+          const points = hexPoints.get(structure.hexId);
+          const box = hexBoxes.get(structure.hexId);
+          if (!box || !points) return;
+          const point = samplePointInPolygonAvoiding(
+            points,
+            `${raw.scenarioId}-${normalizedPlayer.playerId}-structure-${structure.hexId}-${structure.type}`,
+            occupied,
+            boxOccupancyRadius(box.widthPercent, box.heightPercent),
+          );
           placements.push({
             id: `${raw.scenarioId}-${normalizedPlayer.playerId}-structure-${structure.hexId}-${structure.type}`,
             playerId: normalizedPlayer.playerId,
@@ -340,64 +544,108 @@ export const getScenarioBank = cache(async (): Promise<TemporaryScenario[]> => {
             tokenPath: tokenPathForFactionPiece(rawPlayer.faction, "structure", structure.type),
             x: point.x,
             y: point.y,
+            boxWidthPercent: box.widthPercent,
+            boxHeightPercent: box.heightPercent,
           });
+          occupied.push({ point, radius: boxOccupancyRadius(box.widthPercent, box.heightPercent) });
         });
 
         const popSlot = popularitySlots.find((slot) => slot.index === rawPlayer.popularity)
           ?? popularitySlots[Math.min(rawPlayer.popularity, popularitySlots.length - 1)];
         if (popSlot) {
+          const popBox = boxFromPoints(popSlot.rectangle.points);
+          const point = samplePointInPolygonAvoiding(
+            popSlot.rectangle.points,
+            `${raw.scenarioId}-${normalizedPlayer.playerId}-popularity`,
+            occupied,
+            boxOccupancyRadius(popBox.widthPercent, popBox.heightPercent),
+          );
           placements.push({
             id: `${raw.scenarioId}-${normalizedPlayer.playerId}-popularity`,
             playerId: normalizedPlayer.playerId,
             kind: "popularity",
             tokenPath: tokenPathForFactionPiece(rawPlayer.faction, "popularity"),
-            x: popSlot.rectangle.center.x,
-            y: popSlot.rectangle.center.y,
-            rotationDeg: popSlot.rectangle.rotationDegrees ?? 0,
+            x: point.x,
+            y: point.y,
+            boxWidthPercent: popBox.widthPercent,
+            boxHeightPercent: popBox.heightPercent,
+            boxRotationDeg: popSlot.rectangle.rotationDegrees ?? 0,
           });
+          occupied.push({ point, radius: boxOccupancyRadius(popBox.widthPercent, popBox.heightPercent) });
         }
 
         const powerValue = rawPlayer.power;
         const strengthSlot = strengthSlots.find((slot) => slot.index === powerValue)
           ?? strengthSlots[Math.min(powerValue, strengthSlots.length - 1)];
         if (strengthSlot) {
+          const strengthBox = boxFromPoints(strengthSlot.rectangle.points);
+          const point = samplePointInPolygonAvoiding(
+            strengthSlot.rectangle.points,
+            `${raw.scenarioId}-${normalizedPlayer.playerId}-strength`,
+            occupied,
+            boxOccupancyRadius(strengthBox.widthPercent, strengthBox.heightPercent),
+          );
           placements.push({
             id: `${raw.scenarioId}-${normalizedPlayer.playerId}-power`,
             playerId: normalizedPlayer.playerId,
             kind: "strength",
             tokenPath: tokenPathForFactionPiece(rawPlayer.faction, "strength"),
-            x: strengthSlot.rectangle.center.x,
-            y: strengthSlot.rectangle.center.y,
-            rotationDeg: strengthSlot.rectangle.rotationDegrees ?? 0,
+            x: point.x,
+            y: point.y,
+            boxWidthPercent: strengthBox.widthPercent,
+            boxHeightPercent: strengthBox.heightPercent,
+            boxRotationDeg: strengthSlot.rectangle.rotationDegrees ?? 0,
           });
+          occupied.push({ point, radius: boxOccupancyRadius(strengthBox.widthPercent, strengthBox.heightPercent) });
         }
 
         const starValue = sumStars(rawPlayer.stars);
-        const starSlot = starSlots.find((slot) => slot.index === starValue)
-          ?? starSlots[Math.min(starValue, starSlots.length - 1)];
-        if (starSlot) {
+        for (let starIndex = 1; starIndex <= starValue; starIndex += 1) {
+          const starSlot = starSlots.find((slot) => slot.index === starIndex)
+            ?? starSlots[Math.min(starIndex, starSlots.length - 1)];
+          if (!starSlot) {
+            continue;
+          }
+
+          const starBox = boxFromPoints(starSlot.rectangle.points);
+          const point = samplePointInPolygonAvoiding(
+            starSlot.rectangle.points,
+            `${raw.scenarioId}-${normalizedPlayer.playerId}-stars-${starIndex}`,
+            occupied,
+            boxOccupancyRadius(starBox.widthPercent, starBox.heightPercent),
+            true,
+          );
           placements.push({
-            id: `${raw.scenarioId}-${normalizedPlayer.playerId}-stars`,
+            id: `${raw.scenarioId}-${normalizedPlayer.playerId}-stars-${starIndex}`,
             playerId: normalizedPlayer.playerId,
             kind: "star",
             tokenPath: tokenPathForFactionPiece(rawPlayer.faction, "star"),
-            x: starSlot.rectangle.center.x,
-            y: starSlot.rectangle.center.y,
-            rotationDeg: starSlot.rectangle.rotationDegrees ?? 0,
+            x: point.x,
+            y: point.y,
+            boxWidthPercent: starBox.widthPercent,
+            boxHeightPercent: starBox.heightPercent,
+            ...starTokenDimensions(`${raw.scenarioId}-${normalizedPlayer.playerId}-stars-${starIndex}`),
+            boxRotationDeg: starSlot.rectangle.rotationDegrees ?? 0,
           });
+          occupied.push({ point, radius: boxOccupancyRadius(starBox.widthPercent, starBox.heightPercent) });
         }
       });
 
       raw.resourcesByHex.forEach((entry, entryIndex) => {
-        const center = hexCenters.get(entry.hexId);
-        if (!center) return;
+        const points = hexPoints.get(entry.hexId);
+        const box = hexBoxes.get(entry.hexId);
+        if (!box || !points) return;
 
         let lane = 0;
         Object.entries(entry.resources).forEach(([resourceType, count]) => {
           const tokenPath = RESOURCE_TOKEN_BY_TYPE[resourceType];
           if (!tokenPath || count <= 0) return;
-
-          const point = normalizePoint(center, 0, lane);
+          const point = samplePointInPolygonAvoiding(
+            points,
+            `${raw.scenarioId}-resource-${entry.hexId}-${resourceType}-${entryIndex}-${lane}`,
+            occupied,
+            boxOccupancyRadius(box.widthPercent, box.heightPercent),
+          );
           placements.push({
             id: `${raw.scenarioId}-${playerCount}-resource-${entry.hexId}-${resourceType}-${entryIndex}`,
             playerId: "board",
@@ -406,7 +654,11 @@ export const getScenarioBank = cache(async (): Promise<TemporaryScenario[]> => {
             x: point.x,
             y: point.y,
             stackCount: count,
+            boxWidthPercent: box.widthPercent,
+            boxHeightPercent: box.heightPercent,
           });
+
+          occupied.push({ point, radius: boxOccupancyRadius(box.widthPercent, box.heightPercent) });
 
           lane += 1;
         });

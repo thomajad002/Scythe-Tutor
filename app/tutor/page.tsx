@@ -19,6 +19,7 @@ import {
   getTemporaryScenarioById,
   getTemporaryScenarioForPlayerCount,
 } from "@/lib/tutor/scenario-bank";
+import { loadScytheBoardData } from "@/lib/scythe/board-data";
 
 const SUBTYPE_LABELS: Record<(typeof SUBTYPE_IDS)[number], string> = {
   popularity_tiers: "Popularity tiers",
@@ -125,6 +126,7 @@ function getDefaultStage(
 
 export default async function TutorPage({ searchParams }: TutorPageProps) {
   const user = await requireUser();
+  const boardGeometry = await loadScytheBoardData();
   const params = searchParams ? await searchParams : {};
   const successMessage = readParam(params.success);
   const errorMessage = readParam(params.error);
@@ -289,6 +291,8 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                 boardImageWidth={subtypeScenario.boardImageWidth}
                 boardImageHeight={subtypeScenario.boardImageHeight}
                 piecePlacements={subtypeScenario.piecePlacements}
+                boardGeometry={boardGeometry}
+                showDebugBorders
                 className="w-full"
               />
 
@@ -384,6 +388,8 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                     boardImageWidth={singleScenario.boardImageWidth}
                     boardImageHeight={singleScenario.boardImageHeight}
                     piecePlacements={singleScenario.piecePlacements}
+                    boardGeometry={boardGeometry}
+                    showDebugBorders
                     className="w-full"
                   />
 
@@ -435,6 +441,8 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                     boardImageWidth={multiplayerScenario.boardImageWidth}
                     boardImageHeight={multiplayerScenario.boardImageHeight}
                     piecePlacements={multiplayerScenario.piecePlacements}
+                    boardGeometry={boardGeometry}
+                    showDebugBorders
                     className="w-full"
                   />
 
