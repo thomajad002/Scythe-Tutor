@@ -32,7 +32,17 @@ const SUBTYPE_LABELS: Record<(typeof SUBTYPE_IDS)[number], string> = {
   structure_bonus_encounter_adjacent: "Structure bonus: encounter adjacent",
   structure_bonus_lake_adjacent: "Structure bonus: lake adjacent",
   total_scoring: "Total scoring",
-  winner_tiebreakers: "Winner and tiebreakers",
+  winner_tiebreakers: "Tie training: winner and reason",
+};
+
+const WINNER_TIEBREAK_REASON_LABELS: Record<string, string> = {
+  unitsAndStructures: "Workers + mechs + structures",
+  power: "Power",
+  popularity: "Popularity",
+  resources: "Resource tokens controlled",
+  territories: "Territories controlled",
+  stars: "Stars placed",
+  shared: "Shared tiebreak stats",
 };
 
 type TutorPageProps = {
@@ -309,7 +319,7 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
     ? requestedPlayers
     : activeMultiplayerTarget;
 
-  const subtypePlayerCount = activeSubtype === "winner_tiebreakers" ? 2 : 1;
+  const subtypePlayerCount = activeSubtype === "winner_tiebreakers" ? 5 : 1;
   const territoriesFactoryMode = activeSubtype === "territories_scoring"
     ? chooseTerritoriesFactoryMode(await getTerritoriesFactoryCoverage(user.id))
     : "any";
@@ -324,6 +334,7 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
     : null;
   const subtypeScenario = subtypeScenarioCandidate
     && subtypeScenarioCandidate.playerCount === subtypePlayerCount
+    && (activeSubtype !== "winner_tiebreakers" || subtypeScenarioCandidate.scenarioKind === "tie-training")
     ? subtypeScenarioCandidate
     : fallbackSubtypeScenario;
 
@@ -440,6 +451,12 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                 <input type="hidden" name="subtype_id" value={activeSubtype} />
                 <input type="hidden" name="scenario_id" value={subtypeScenario.id} />
 
+                {activeSubtype === "winner_tiebreakers" ? (
+                  <p className="rounded-xl border border-border bg-surface-2 p-3 text-sm text-muted">
+                    All players are tied at the coin total. Pick the winner and the tiebreak reason.
+                  </p>
+                ) : null}
+
                 {activeSubtype === "popularity_tiers" ? (
                   <label className="block text-sm text-muted">
                     Select popularity tier
@@ -452,14 +469,31 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                 ) : null}
 
                 {activeSubtype === "winner_tiebreakers" ? (
-                  <label className="block text-sm text-muted">
-                    Choose winner
-                    <select name="winner_id" className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-foreground" defaultValue={subtypeScenario.players[0]?.playerId}>
-                      {subtypeScenario.players.map((player) => (
-                        <option key={player.playerId} value={player.playerId}>{player.displayName}</option>
-                      ))}
-                    </select>
-                  </label>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <fieldset className="rounded-xl border border-border bg-surface-2 p-3">
+                      <legend className="px-1 text-sm text-muted">Winner</legend>
+                      <div className="mt-2 space-y-2">
+                        {subtypeScenario.players.map((player) => (
+                          <label key={player.playerId} className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-foreground">
+                            <input type="radio" name="winner_id" value={player.playerId} defaultChecked={player.playerId === subtypeScenario.players[0]?.playerId} />
+                            <span>{player.displayName}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </fieldset>
+
+                    <fieldset className="rounded-xl border border-border bg-surface-2 p-3">
+                      <legend className="px-1 text-sm text-muted">Reason</legend>
+                      <div className="mt-2 space-y-2">
+                        {Object.entries(WINNER_TIEBREAK_REASON_LABELS).map(([reasonId, reasonLabel]) => (
+                          <label key={reasonId} className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-foreground">
+                            <input type="radio" name="reason_id" value={reasonId} defaultChecked={reasonId === "unitsAndStructures"} />
+                            <span>{reasonLabel}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </fieldset>
+                  </div>
                 ) : null}
 
                 {activeSubtype !== "popularity_tiers" && activeSubtype !== "winner_tiebreakers" ? (

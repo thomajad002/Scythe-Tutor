@@ -186,6 +186,27 @@ function toOptionalInt(value: FormDataEntryValue | null): number | undefined {
   return parsed;
 }
 
+function formatWinnerTiebreakReason(reason: string): string {
+  switch (reason) {
+    case "unitsAndStructures":
+      return "workers + mechs + structures";
+    case "power":
+      return "power";
+    case "popularity":
+      return "popularity";
+    case "resources":
+      return "resource tokens controlled";
+    case "territories":
+      return "territories controlled";
+    case "stars":
+      return "stars placed";
+    case "shared":
+      return "shared tiebreak stats";
+    default:
+      return reason;
+  }
+}
+
 async function persistProgress(
   userId: string,
   next: Awaited<ReturnType<typeof getTutorProgressState>>,
@@ -344,13 +365,14 @@ export async function submitSubtypeTutorAttempt(formData: FormData) {
     sendError("That subtype is locked until the first five are mastered.");
   }
 
-  const requiredPlayerCount = subtypeId === "winner_tiebreakers" ? 2 : 1;
+  const requiredPlayerCount = subtypeId === "winner_tiebreakers" ? 5 : 1;
   const territoriesFactoryMode = subtypeId === "territories_scoring"
     ? await chooseTerritoriesFactoryMode(user.id)
     : "any";
   const scenarioCandidate = await getTemporaryScenarioById(scenarioId);
   const scenario = scenarioCandidate
     && scenarioCandidate.playerCount === requiredPlayerCount
+    && (subtypeId !== "winner_tiebreakers" || scenarioCandidate.scenarioKind === "tie-training")
     ? scenarioCandidate
     : await getTemporaryScenarioForPlayerCount(user.id, requiredPlayerCount, subtypeId, {
       territoriesFactoryMode,
@@ -365,9 +387,12 @@ export async function submitSubtypeTutorAttempt(formData: FormData) {
 
   if (subtypeId === "winner_tiebreakers") {
     const submittedWinnerId = String(formData.get("winner_id") ?? "");
+    const submittedReasonId = String(formData.get("reason_id") ?? "");
     const round = scoreMultiplayerRound(scenario.players);
-    isCorrect = submittedWinnerId === round.winnerPlayerId;
-    summary = `Expected winner: ${round.winnerPlayerId.toUpperCase()} | Tiebreak reason: ${round.tiebreakReason}`;
+    const winnerCorrect = submittedWinnerId === round.winnerPlayerId;
+    const reasonCorrect = submittedReasonId === round.tiebreakReason;
+    isCorrect = winnerCorrect && reasonCorrect;
+    summary = `Expected winner: ${round.winnerPlayerId.toUpperCase()} | Expected reason: ${formatWinnerTiebreakReason(round.tiebreakReason)}`;
 
     if (!isCorrect) {
       adaptiveHints = [
@@ -735,7 +760,7 @@ export async function refreshTemporarySubtypeScenario(formData: FormData) {
     sendError("Choose a valid subtype.");
   }
 
-  const playerCount = subtypeId === "winner_tiebreakers" ? 2 : 1;
+  const playerCount = subtypeId === "winner_tiebreakers" ? 5 : 1;
   const territoriesFactoryMode = subtypeId === "territories_scoring"
     ? await chooseTerritoriesFactoryMode(user.id)
     : "any";

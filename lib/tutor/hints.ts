@@ -228,11 +228,11 @@ export function getSubtypeHints(
     case "winner_tiebreakers":
       switch (level) {
         case 1:
-          return "Compare total scores first, then check ties.";
+          return "All players are tied on coins, so compare the tiebreak rules next.";
         case 2:
-          return "If totals are tied, use the tiebreak order from the rules.";
+          return "Pick the winner first, then match the reason that breaks the coin tie.";
         case 3:
-          return "Tiebreak order is units and structures, power, popularity, resources, territories, then stars.";
+          return "Tiebreak order is workers + mechs + structures, power, popularity, resources, territories, then stars.";
         default:
           return context.winnerDisplayName
             ? `Bottom-out: ${context.winnerDisplayName} wins on ${formatTiebreakReason(context.winnerTiebreakReason)}.`

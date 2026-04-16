@@ -42,6 +42,7 @@ type RawScoringEntry = {
 
 type RawScenario = {
   scenarioId: string;
+  scenarioKind: "standard" | "tie-training";
   structureBonus: string;
   players: RawScenarioPlayer[];
   resourcesByHex: Array<{ hexId: number; resources: Record<string, number> }>;
@@ -87,6 +88,7 @@ export type TemporaryScenarioPlayer = MultiplayerScoringPlayerInput & {
 
 export type TemporaryScenario = {
   id: string;
+  scenarioKind: "standard" | "tie-training";
   playerCount: number;
   boardImagePath: string;
   boardImageWidth: number;
@@ -506,7 +508,7 @@ function filterBySubtype(
       case "total_scoring":
         return scenario.players.some((p) => p.stars > 0 && p.territories > 0 && p.resources > 0);
       case "winner_tiebreakers":
-        return scenario.playerCount >= 2;
+        return scenario.scenarioKind === "tie-training";
       default:
         return true;
     }
@@ -920,6 +922,7 @@ export const getScenarioBank = cache(async (): Promise<TemporaryScenario[]> => {
         const focusKey = selectedPlayers.map((player) => player.faction).join("-");
         scenarios.push({
           id: `scythe-${raw.scenarioId}-${playerCount}p-${focusKey}`,
+          scenarioKind: raw.scenarioKind,
           playerCount,
           boardImagePath: `/assets/boards/${board.image.name}`,
           boardImageWidth: board.image.width,
