@@ -25,7 +25,7 @@ const PIECE_SIZE_PERCENT: Record<PieceKind, number> = {
 };
 
 const PIECE_TOKEN_SCALE_PERCENT: Record<PieceKind, number> = {
-  worker: 40,
+  worker: 36,
   mech: 45,
   character: 60,
   structure: 30,
@@ -33,7 +33,7 @@ const PIECE_TOKEN_SCALE_PERCENT: Record<PieceKind, number> = {
   popularity: 80,
   strength: 90,
   star: 60,
-  structure_bonus: 72,
+  structure_bonus: 100,
 };
 
 const PIECE_Z_INDEX: Record<PieceKind, number> = {

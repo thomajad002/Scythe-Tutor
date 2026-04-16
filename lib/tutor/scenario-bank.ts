@@ -135,8 +135,8 @@ function clamp(value: number, min: number, max: number): number {
 
 function starTokenDimensions(seed: string): { widthPercent: number; heightPercent: number } {
   const hash = hashString(seed);
-  const widthPercent = clamp(52 + (hash % 5) * 2, 50, 62);
-  const heightPercent = clamp(50 + ((hash >> 3) % 5) * 2, 48, 60);
+  const widthPercent = clamp(32 + (hash % 5) * 2, 30, 42);
+  const heightPercent = clamp(30 + ((hash >> 3) % 5) * 2, 28, 40);
   return { widthPercent, heightPercent };
 }
 
@@ -275,7 +275,10 @@ function samplePointInPolygon(points: HexPoint[], seedKey: string, preferBottom 
 
   for (let attempt = 0; attempt < 80; attempt += 1) {
     const x = bounds.minX + rng() * (bounds.maxX - bounds.minX);
-    const yBias = preferBottom ? 0.62 + rng() * 0.34 : 0.15 + rng() * 0.7;
+    const bottomBias = 0.72 + rng() * 0.26;
+    const neutralBias = 0.14 + rng() * 0.76;
+    const blend = preferBottom ? Math.max(0, 1 - attempt / 120) : 0;
+    const yBias = blend > 0 ? bottomBias * blend + neutralBias * (1 - blend) : neutralBias;
     const y = bounds.minY + ((bounds.maxY - bounds.minY) * yBias);
     const candidate = {
       x: Math.max(0, Math.min(1, x)),
@@ -303,6 +306,9 @@ function samplePointInPolygonAvoiding(
   occupied: PlacementAnchor[],
   radius: number,
   preferBottom = false,
+  edgeInsetFactor = 0.9,
+  minVerticalBias = 0,
+  maxVerticalBias = 1,
 ): HexPoint {
   if (points.length === 0) {
     return { x: 0.5, y: 0.5 };
@@ -312,14 +318,18 @@ function samplePointInPolygonAvoiding(
   const bounds = polygonBounds(points);
   const boundsWidth = bounds.maxX - bounds.minX;
   const boundsHeight = bounds.maxY - bounds.minY;
-  const marginX = Math.min(radius * 0.9, boundsWidth * 0.45);
-  const marginY = Math.min(radius * 0.9, boundsHeight * 0.45);
+  const marginX = Math.min(radius * edgeInsetFactor, boundsWidth * 0.45);
+  const marginY = Math.min(radius * edgeInsetFactor, boundsHeight * 0.45);
   let bestCandidate: HexPoint | null = null;
   let bestScore = -Infinity;
 
   for (let attempt = 0; attempt < 160; attempt += 1) {
     const x = bounds.minX + rng() * (bounds.maxX - bounds.minX);
-    const yBias = preferBottom ? 0.62 + rng() * 0.34 : 0.18 + rng() * 0.64;
+    const bottomBias = 0.72 + rng() * 0.26;
+    const neutralBias = 0.14 + rng() * 0.76;
+    const blend = preferBottom ? Math.max(0, 1 - attempt / 220) : 0;
+    const rawYBias = blend > 0 ? bottomBias * blend + neutralBias * (1 - blend) : neutralBias;
+    const yBias = clamp(rawYBias, minVerticalBias, maxVerticalBias);
     const y = bounds.minY + ((bounds.maxY - bounds.minY) * yBias);
     const candidate = {
       x: Math.max(0, Math.min(1, x)),
@@ -505,8 +515,20 @@ export const getScenarioBank = cache(async (): Promise<TemporaryScenario[]> => {
         .filter((entry) => selectedFactions.has(entry.converted.faction))
         .map((entry) => entry.rawPlayer);
 
+      const starSlotsByFaction = new Map<RawScenarioPlayer["faction"], ReturnType<typeof resolveStarSlots>>();
+      const starSlotDemand = new Map<number, number>();
+      selectedRawPlayers.forEach((rawPlayer) => {
+        const slotsForPlayer = resolveStarSlots(rawPlayer.stars, starSlots);
+        starSlotsByFaction.set(rawPlayer.faction, slotsForPlayer);
+        slotsForPlayer.forEach((slot) => {
+          starSlotDemand.set(slot.index, (starSlotDemand.get(slot.index) ?? 0) + 1);
+        });
+      });
+
       const placements: PiecePlacement[] = [];
       const occupied: PlacementAnchor[] = [];
+      const starAnchors: PlacementAnchor[] = [];
+      const starAnchorsBySlot = new Map<number, PlacementAnchor[]>();
 
       const structureBonusMarker = board.boardMarkers?.structureBonus;
       if (structureBonusMarker) {
@@ -676,7 +698,8 @@ export const getScenarioBank = cache(async (): Promise<TemporaryScenario[]> => {
           occupied.push({ point, radius: boxOccupancyRadius(strengthBox.widthPercent, strengthBox.heightPercent) });
         }
 
-        const starPlacementSlots = resolveStarSlots(rawPlayer.stars, starSlots);
+        const starPlacementSlots = starSlotsByFaction.get(rawPlayer.faction)
+          ?? resolveStarSlots(rawPlayer.stars, starSlots);
         for (let starIndex = 0; starIndex < starPlacementSlots.length; starIndex += 1) {
           const starSlot = starPlacementSlots[starIndex];
           if (!starSlot) {
@@ -684,13 +707,29 @@ export const getScenarioBank = cache(async (): Promise<TemporaryScenario[]> => {
           }
 
           const starBox = boxFromPoints(starSlot.rectangle.points);
-          const point = samplePointInPolygonAvoiding(
-            starSlot.rectangle.points,
-            `${raw.scenarioId}-${normalizedPlayer.playerId}-stars-${starIndex + 1}`,
-            occupied,
-            boxOccupancyRadius(starBox.widthPercent, starBox.heightPercent),
-            true,
-          );
+          const baseStarRadius = boxOccupancyRadius(starBox.widthPercent, starBox.heightPercent);
+          const starOnlyGapRadius = baseStarRadius * 1.35;
+          const perSlotAnchors = starAnchorsBySlot.get(starSlot.index) ?? [];
+          const slotDemand = starSlotDemand.get(starSlot.index) ?? 1;
+          const point = slotDemand <= 1
+            ? samplePointInPolygonAvoiding(
+              starSlot.rectangle.points,
+              `${raw.scenarioId}-${normalizedPlayer.playerId}-stars-${starIndex + 1}-solo`,
+              occupied.concat(starAnchors, perSlotAnchors),
+              starOnlyGapRadius,
+              true,
+              0.25,
+              0.58,
+              0.95,
+            )
+            : samplePointInPolygonAvoiding(
+              starSlot.rectangle.points,
+              `${raw.scenarioId}-${normalizedPlayer.playerId}-stars-${starIndex + 1}`,
+              occupied.concat(starAnchors, perSlotAnchors),
+              starOnlyGapRadius,
+              true,
+              0.25,
+            );
           placements.push({
             id: `${raw.scenarioId}-${normalizedPlayer.playerId}-stars-${starIndex + 1}`,
             playerId: normalizedPlayer.playerId,
@@ -703,7 +742,10 @@ export const getScenarioBank = cache(async (): Promise<TemporaryScenario[]> => {
             ...starTokenDimensions(`${raw.scenarioId}-${normalizedPlayer.playerId}-stars-${starIndex + 1}`),
             boxRotationDeg: starSlot.rectangle.rotationDegrees ?? 0,
           });
-          occupied.push({ point, radius: boxOccupancyRadius(starBox.widthPercent, starBox.heightPercent) });
+          starAnchors.push({ point, radius: starOnlyGapRadius });
+          perSlotAnchors.push({ point, radius: starOnlyGapRadius * 1.2 });
+          starAnchorsBySlot.set(starSlot.index, perSlotAnchors);
+          occupied.push({ point, radius: baseStarRadius });
         }
       });
 
