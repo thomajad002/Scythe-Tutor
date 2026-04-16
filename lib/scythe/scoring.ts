@@ -552,9 +552,9 @@ export function scoreMultiplayerRound(players: MultiplayerScoringPlayerInput[]):
       continue;
     }
 
+    tiebreakReason = tiebreakKey;
     if (candidate.tiebreaker[tiebreakKey] > best.tiebreaker[tiebreakKey]) {
       best = candidate;
-      tiebreakReason = tiebreakKey;
     }
   }
 

@@ -49,6 +49,8 @@ type RawScenario = {
   scoring: {
     players: RawScoringEntry[];
     winnerFaction: string;
+    winnerRule?: string;
+    winnerReason?: string;
   };
 };
 
@@ -91,6 +93,9 @@ export type TemporaryScenario = {
   id: string;
   scenarioKind: "standard" | "tie-training";
   playerCount: number;
+  winnerFaction?: RawScenario["scoring"]["winnerFaction"];
+  winnerRule?: string;
+  winnerReason?: string;
   boardImagePath: string;
   boardImageWidth: number;
   boardImageHeight: number;
@@ -928,6 +933,9 @@ export const getScenarioBank = cache(async (): Promise<TemporaryScenario[]> => {
           id: `scythe-${raw.scenarioId}-${playerCount}p-${focusKey}`,
           scenarioKind: raw.scenarioKind,
           playerCount,
+          winnerFaction: raw.scenarioKind === "tie-training" ? raw.scoring.winnerFaction : undefined,
+          winnerRule: raw.scenarioKind === "tie-training" ? raw.scoring.winnerRule : undefined,
+          winnerReason: raw.scenarioKind === "tie-training" ? raw.scoring.winnerReason : undefined,
           boardImagePath: `/assets/boards/${board.image.name}`,
           boardImageWidth: board.image.width,
           boardImageHeight: board.image.height,

@@ -262,6 +262,50 @@ describe("scoreMultiplayerRound", () => {
     expect(round.winnerPlayerId).toBe("p2");
     expect(round.tiebreakReason).toBe("unitsAndStructures");
   });
+
+  it("reports the deciding tiebreak reason when the first player wins the tie", () => {
+    const round = scoreMultiplayerRound([
+      {
+        playerId: "p1",
+        stars: 3,
+        territories: 7,
+        resources: 6,
+        coins: 17,
+        popularity: 12,
+        structureBonusCoins: 9,
+        factoryControlled: false,
+        tiebreaker: {
+          unitsAndStructures: 14,
+          power: 16,
+          popularity: 12,
+          resources: 6,
+          territories: 7,
+          stars: 3,
+        },
+      },
+      {
+        playerId: "p2",
+        stars: 6,
+        territories: 6,
+        resources: 4,
+        coins: 10,
+        popularity: 7,
+        structureBonusCoins: 9,
+        factoryControlled: false,
+        tiebreaker: {
+          unitsAndStructures: 11,
+          power: 16,
+          popularity: 7,
+          resources: 4,
+          territories: 6,
+          stars: 6,
+        },
+      },
+    ]);
+
+    expect(round.winnerPlayerId).toBe("p1");
+    expect(round.tiebreakReason).toBe("unitsAndStructures");
+  });
 });
 
 describe("getLayeredHints", () => {

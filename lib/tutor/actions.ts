@@ -190,6 +190,8 @@ function toOptionalInt(value: FormDataEntryValue | null): number | undefined {
 
 function formatWinnerTiebreakReason(reason: string): string {
   switch (reason) {
+    case "piecesAndStructures":
+      return "workers + mechs + structures";
     case "unitsAndStructures":
       return "workers + mechs + structures";
     case "power":
@@ -206,6 +208,15 @@ function formatWinnerTiebreakReason(reason: string): string {
       return "shared tiebreak stats";
     default:
       return reason;
+  }
+}
+
+function normalizeWinnerRule(rule: string): string {
+  switch (rule) {
+    case "piecesAndStructures":
+      return "unitsAndStructures";
+    default:
+      return rule;
   }
 }
 
@@ -395,20 +406,28 @@ export async function submitSubtypeTutorAttempt(formData: FormData) {
   if (subtypeId === "winner_tiebreakers") {
     const submittedWinnerId = String(formData.get("winner_id") ?? "");
     const submittedReasonId = String(formData.get("reason_id") ?? "");
-    const round = scoreMultiplayerRound(scenario.players);
-    const winnerCorrect = submittedWinnerId === round.winnerPlayerId;
-    const reasonCorrect = submittedReasonId === round.tiebreakReason;
+    const scenarioWinnerId = scenario.winnerFaction
+      ? scenario.players.find((player) => player.faction === scenario.winnerFaction)?.playerId ?? null
+      : null;
+    const scenarioWinnerReason = scenario.winnerRule ? normalizeWinnerRule(scenario.winnerRule) : null;
+    const round = scenarioWinnerId && scenarioWinnerReason
+      ? null
+      : scoreMultiplayerRound(scenario.players);
+    const winnerCorrect = submittedWinnerId === (scenarioWinnerId ?? round?.winnerPlayerId ?? "");
+    const reasonCorrect = submittedReasonId === (scenarioWinnerReason ?? round?.tiebreakReason ?? "");
     isCorrect = winnerCorrect && reasonCorrect;
-    summary = `Expected winner: ${round.winnerPlayerId.toUpperCase()} | Expected reason: ${formatWinnerTiebreakReason(round.tiebreakReason)}`;
+    summary = scenarioWinnerId && scenarioWinnerReason
+      ? `Expected winner: ${scenarioWinnerId.toUpperCase()} | Expected reason: ${formatWinnerTiebreakReason(scenarioWinnerReason)}`
+      : `Expected winner: ${round!.winnerPlayerId.toUpperCase()} | Expected reason: ${formatWinnerTiebreakReason(round!.tiebreakReason)}`;
 
     if (!isCorrect) {
       adaptiveHints = [
         getSubtypeHints(subtypeId, adaptiveLevel, {
           player: scenario.players[0],
           breakdown: scoreFullScenario(scenario.players[0]),
-          expectedValue: round.winnerPlayerId,
-          winnerDisplayName: scenario.players.find((player) => player.playerId === round.winnerPlayerId)?.displayName,
-          winnerTiebreakReason: round.tiebreakReason,
+          expectedValue: scenarioWinnerId ?? round!.winnerPlayerId,
+          winnerDisplayName: scenario.players.find((player) => player.playerId === (scenarioWinnerId ?? round!.winnerPlayerId))?.displayName,
+          winnerTiebreakReason: scenarioWinnerReason ?? round!.tiebreakReason,
         }),
       ];
     }

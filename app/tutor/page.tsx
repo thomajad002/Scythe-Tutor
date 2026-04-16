@@ -387,11 +387,11 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
     ? subtypeScenarioCandidate
     : fallbackSubtypeScenario;
 
-  const fallbackSingleScenario = await getTemporaryScenarioForPlayerCount(user.id, 1);
+  const fallbackSingleScenario = await getTemporaryScenarioForPlayerCount(user.id, 5);
   const singleScenarioCandidate = requestedScenarioId
     ? await getTemporaryScenarioById(requestedScenarioId)
     : null;
-  const singleScenario = singleScenarioCandidate && singleScenarioCandidate.playerCount === 1
+  const singleScenario = singleScenarioCandidate && singleScenarioCandidate.playerCount === 5
     ? singleScenarioCandidate
     : fallbackSingleScenario;
 
@@ -467,12 +467,8 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
             <div className="space-y-4">
               <div className="space-y-2">
                 <h2 className="text-2xl">Walkthrough: Subtype Mastery</h2>
-                <p className="text-sm text-muted">
-                  Focus on one subtype at a time. Current target: <span className="text-foreground">{SUBTYPE_LABELS[activeSubtype]}</span>
-                </p>
               </div>
 
-              <p className="text-sm text-muted">Scenario <span className="text-foreground">{subtypeScenario.id}</span></p>
               <BoardMap
                 boardImagePath={subtypeScenario.boardImagePath}
                 boardImageWidth={subtypeScenario.boardImageWidth}
@@ -485,7 +481,7 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                 className="w-full"
               />
 
-              {activeSubtype === "total_scoring" || activeSubtype === "winner_tiebreakers" ? (
+              {activeSubtype === "total_scoring" ? (
                 <CoinPile
                   hidePlayerTotals={activeSubtype === "total_scoring"}
                   scenarioId={subtypeScenario.id}
@@ -610,6 +606,12 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
               {singlePlayerUnlocked ? (
                 <div className="space-y-3">
                   <p className="text-sm text-muted">Scenario <span className="text-foreground">{singleScenario.id}</span> | Consecutive correct: {progress.singlePlayerConsecutiveCorrect}</p>
+                  <div className="rounded-xl border border-border bg-surface-2 p-3 text-sm text-muted">
+                    <p>
+                      You are this faction: <FactionLabel value={singleScenario.players[0].displayName} className="text-base" />
+                    </p>
+                    <p className="mt-1">How many points did you score? Add each section yourself before submitting the total.</p>
+                  </div>
                   <BoardMap
                     boardImagePath={singleScenario.boardImagePath}
                     boardImageWidth={singleScenario.boardImageWidth}
@@ -623,14 +625,27 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                   />
 
                   <div className="grid gap-2 rounded-xl border border-border bg-surface-2 p-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
-                    <p>Stars: {singleScenario.players[0].stars}</p>
-                    <p>Territories: {singleScenario.players[0].territories}</p>
-                    <p>Resources: {singleScenario.players[0].resources}</p>
-                    <p>Coins: {singleScenario.players[0].coins}</p>
-                    <p>Popularity: {singleScenario.players[0].popularity}</p>
-                    <p>Factory controlled: {singleScenario.players[0].factoryControlled ? "Yes" : "No"}</p>
-                    <p>Structure bonus: {singleScenario.players[0].structureBonusCoins ?? 0}</p>
-                    <p className="sm:col-span-2 lg:col-span-3">Faction: <FactionLabel value={singleScenario.players[0].faction} /></p>
+                    {singleScenario.players.map((player, index) => (
+                      <div
+                        key={player.playerId}
+                        className={`rounded-lg border p-3 ${
+                          index === 0
+                            ? "border-accent bg-accent/10"
+                            : "border-border/60 bg-surface"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <FactionLabel value={player.displayName} className="text-sm" />
+                          {index === 0 ? (
+                            <span className="text-[11px] uppercase tracking-[0.16em] text-accent-strong">You are this faction</span>
+                          ) : null}
+                        </div>
+                        <p className="mt-2 text-muted">Stars {player.stars} | Territories {player.territories}</p>
+                        <p className="text-muted">Resources {player.resources} | Coins {player.coins}</p>
+                        <p className="text-muted">Popularity {player.popularity} | Factory {player.factoryControlled ? "Yes" : "No"}</p>
+                        <p className="text-muted">Structure bonus {player.structureBonusCoins ?? 0}</p>
+                      </div>
+                    ))}
                   </div>
 
                   <form action={submitSinglePlayerScoringAttempt} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -730,11 +745,7 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
 
           {activeStage === "speed" ? (
             <div className="space-y-4">
-              <h2 className="text-2xl">Speed Challenge Unlocked</h2>
-              <p className="text-sm text-muted">
-                You have cleared all required gates. Next implementation step is timed full-game rounds with countdown and scoring latency tracking.
-              </p>
-              <p className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm text-emerald-200">Ready state reached.</p>
+              <h2 className="text-2xl">Coming soon</h2>
             </div>
           ) : null}
         </Card>
@@ -912,7 +923,7 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                   }`}
                 >
                   <span className="block text-muted">Speed challenge</span>
-                  <span className="block font-medium">{progress.speedChallengeUnlocked ? "Unlocked" : "Locked"}</span>
+                  <span className="block font-medium">Coming soon</span>
                 </button>
               </form>
             </div>
