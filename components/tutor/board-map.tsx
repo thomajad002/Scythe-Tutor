@@ -79,14 +79,6 @@ const COLOR_TO_FACTION_LABEL: Record<FactionColor, string> = {
   white: "POLANIA",
 };
 
-const FACTION_HEADING_COLOR: Record<FactionColor, string> = {
-  black: "text-slate-900",
-  red: "text-rose-400",
-  blue: "text-sky-400",
-  yellow: "text-amber-400",
-  white: "text-slate-100",
-};
-
 type PieceDetailsByPlayer = {
   playerId: string;
   factionColor: FactionColor;
@@ -194,6 +186,21 @@ function defaultPieceScale(kind: PieceKind): number {
   return 60;
 }
 
+function factionColorClass(color: FactionColor): string {
+  switch (color) {
+    case "black":
+      return "text-slate-900";
+    case "red":
+      return "text-rose-400";
+    case "blue":
+      return "text-sky-400";
+    case "yellow":
+      return "text-amber-400";
+    case "white":
+      return "text-slate-100";
+  }
+}
+
 export function BoardMap({
   boardImagePath,
   boardImageWidth,
@@ -206,7 +213,6 @@ export function BoardMap({
   className,
 }: BoardMapProps) {
   const [selectedHexId, setSelectedHexId] = useState<number | null>(null);
-  const [hoveredHexId, setHoveredHexId] = useState<number | null>(null);
   const aspectRatio = `${boardImageWidth} / ${boardImageHeight}`;
 
   const occupiedHexes = useMemo<OccupiedHexDetails[]>(() => {
@@ -324,6 +330,27 @@ export function BoardMap({
     [occupiedHexes, selectedHexId],
   );
 
+  const selectedHexTitle = useMemo(() => {
+    if (!selectedHex) {
+      return null;
+    }
+
+    const ownedGroup = selectedHex.resourceDetailsByPlayer.find((group) => group.playerId !== "unknown")
+      ?? selectedHex.pieceDetailsByPlayer.find((group) => group.playerId !== "board");
+
+    if (!ownedGroup) {
+      return {
+        text: "UNCLAIMED RESOURCES",
+        factionColor: "white" as FactionColor,
+      };
+    }
+
+    return {
+      text: ownedGroup.factionLabel,
+      factionColor: ownedGroup.factionColor,
+    };
+  }, [selectedHex]);
+
   function findHexAtPoint(point: { x: number; y: number }): OccupiedHexDetails | null {
     for (let index = occupiedHexes.length - 1; index >= 0; index -= 1) {
       const hex = occupiedHexes[index];
@@ -341,11 +368,6 @@ export function BoardMap({
       y: (clientY - rect.top) / rect.height,
     };
     return findHexAtPoint(point);
-  }
-
-  function handleOverlayPointerMove(event: PointerEvent<HTMLDivElement>) {
-    const hit = findHexFromClientPoint(event.clientX, event.clientY, event.currentTarget.getBoundingClientRect());
-    setHoveredHexId(hit?.hexId ?? null);
   }
 
   function handleOverlayPointerDown(event: PointerEvent<HTMLDivElement>) {
@@ -421,141 +443,57 @@ export function BoardMap({
 
         {showTouchMapLayer || enableHexDetails ? (
           <div
-            className="absolute inset-0 z-[200] bg-slate-950/15 backdrop-blur-md"
-            onPointerMove={handleOverlayPointerMove}
-            onPointerLeave={() => setHoveredHexId(null)}
+            className="absolute inset-0 z-[200]"
             onPointerDown={handleOverlayPointerDown}
-          >
-            <svg className="absolute inset-0 h-full w-full pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-              {occupiedHexes.map((hex) => {
-                const isHovered = hoveredHexId === hex.hexId;
-                const isActive = selectedHexId === hex.hexId;
-                const centerX = hex.points.reduce((sum, point) => sum + point.x, 0) / hex.points.length;
-                const centerY = hex.points.reduce((sum, point) => sum + point.y, 0) / hex.points.length;
-
-                return (
-                  <g key={`hit-${hex.hexId}`}>
-                    <polygon
-                      points={hex.polygonPoints}
-                      fill={showTouchMapLayer ? (isActive ? "rgba(248, 250, 252, 0.34)" : isHovered ? "rgba(34, 211, 238, 0.28)" : "rgba(34, 211, 238, 0.16)") : "rgba(255,255,255,0.04)"}
-                      stroke={showTouchMapLayer ? (isActive ? "rgba(255,255,255,1)" : isHovered ? "rgba(255,255,255,0.96)" : "rgba(191, 219, 254, 0.95)") : "transparent"}
-                      strokeWidth={showTouchMapLayer ? (isActive ? 0.38 : isHovered ? 0.32 : 0.22) : 0}
-                      vectorEffect="non-scaling-stroke"
-                    />
-                    {showTouchMapLayer ? (
-                      <text
-                        x={centerX * 100}
-                        y={centerY * 100}
-                        textAnchor="middle"
-                        dominantBaseline="middle"
-                        className="fill-slate-950"
-                        style={{ fontSize: "1.8px", fontWeight: 800, letterSpacing: "0.18em" }}
-                      >
-                        HEX {hex.hexId}
-                      </text>
-                    ) : null}
-                  </g>
-                );
-              })}
-            </svg>
-          </div>
+          />
         ) : null}
-        </div>
-      </div>
 
-      {selectedHex ? (
-        <div className="fixed inset-0 z-[260] flex items-center justify-center bg-black/30 p-4 backdrop-blur-lg" onClick={() => setSelectedHexId(null)}>
+        {selectedHex && selectedHexTitle ? (
           <div
-            className="w-full max-w-4xl rounded-2xl border border-border bg-surface/95 p-4 shadow-2xl"
-            style={{ maxHeight: "calc(100% - 2rem)", overflow: "auto" }}
+            className="absolute left-auto right-4 top-4 z-50 w-80 overflow-hidden rounded-3xl border border-border bg-surface-2 p-4 text-foreground shadow-lg"
+            style={{ maxHeight: "80vh", overflowY: "auto", pointerEvents: "auto" }}
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="mb-3 flex items-start justify-between gap-3">
-              <div>
-                <h3 className="text-xl font-bold tracking-[0.08em]">HEX {selectedHex.hexId}</h3>
-                <p className="text-sm text-muted">Pieces are expanded for easier inspection.</p>
+            <div className="flex items-start justify-between gap-3 border-b border-border pb-3">
+              <div className="space-y-1">
+                <h3 className={cn("text-lg font-black tracking-[0.2em]", factionColorClass(selectedHexTitle.factionColor))}>
+                  {selectedHexTitle.text} HEX
+                </h3>
+                <p className="text-xs text-muted">Pieces and resources</p>
               </div>
               <button
                 type="button"
                 onClick={() => setSelectedHexId(null)}
-                className="rounded-md border border-border bg-surface-2 px-3 py-1 text-sm text-foreground"
+                className="rounded-full border border-border bg-surface-3 px-2 py-1 text-xs font-semibold text-foreground hover:bg-surface"
               >
-                Close
+                ✕
               </button>
             </div>
 
-            <div className="space-y-3">
-              {selectedHex.pieceDetailsByPlayer.length > 0 ? (
-                selectedHex.pieceDetailsByPlayer.map((group) => (
-                  <section
-                    key={`pieces-${group.playerId}`}
-                    className={cn(
-                      "rounded-xl border p-3",
-                      group.factionColor === "black"
-                        ? "border-slate-300 bg-slate-100 text-slate-900"
-                        : "border-border bg-surface-2",
-                    )}
-                  >
-                    <h4 className={cn("text-lg font-black tracking-[0.12em]", FACTION_HEADING_COLOR[group.factionColor])}>
-                      {group.factionLabel} PLAYER PIECES
-                    </h4>
-                    <div className="mt-2 flex flex-wrap gap-3">
-                      {group.pieces.map((piece) => (
-                        <div
-                          key={piece.id}
-                          className="relative flex h-[96px] w-[96px] items-center justify-center rounded-lg border border-border/60 bg-surface"
-                        >
-                          <img
-                            src={piece.tokenPath}
-                            alt={`${group.factionLabel} ${piece.kind}`}
-                            className="select-none object-contain"
-                            style={{
-                              width: `${defaultPieceScale(piece.kind)}px`,
-                              height: `${defaultPieceScale(piece.kind)}px`,
-                            }}
-                          />
-                          {piece.stackCount && piece.stackCount > 1 ? (
-                            <span className="absolute bottom-1 right-1 rounded-full border border-border bg-surface-3 px-2 py-0.5 text-[11px] font-semibold">
-                              x{piece.stackCount}
-                            </span>
-                          ) : null}
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-                ))
-              ) : (
-                <section className="rounded-xl border border-border bg-surface-2 p-3">
-                  <h4 className="text-lg font-black tracking-[0.12em]">PLAYER PIECES</h4>
-                  <p className="text-sm text-muted">No player pieces are on this hex.</p>
-                </section>
-              )}
-
-              <section className="rounded-xl border border-border bg-surface-2 p-3">
-                <h4 className="text-lg font-black tracking-[0.12em]">CONTROLLED RESOURCES</h4>
-                {selectedHex.resourceDetailsByPlayer.length > 0 ? (
-                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                    {selectedHex.resourceDetailsByPlayer.map((group) => (
-                      <div
-                        key={`resources-${group.playerId}`}
-                        className={cn(
-                          "rounded-lg border p-2",
-                          group.factionColor === "black"
-                            ? "border-slate-300 bg-slate-100 text-slate-900"
-                            : "border-border bg-surface",
-                        )}
-                      >
-                        <p className={cn("mb-2 text-sm font-extrabold tracking-[0.1em]", FACTION_HEADING_COLOR[group.factionColor])}>
-                          {group.factionLabel}
-                        </p>
-                        <div className="space-y-1">
-                          {group.resources.map((resource) => (
-                            <div key={`${group.playerId}-${resource.type}`} className="flex items-center justify-between gap-2">
-                              <span className="flex items-center gap-2 text-sm">
-                                <img src={resource.tokenPath} alt={resource.type} className="h-6 w-6 object-contain" />
-                                {resource.type}
-                              </span>
-                              <span className="text-sm font-semibold">x{resource.count}</span>
+            <div className="mt-3 space-y-3">
+              <section className="rounded-xl border border-border bg-surface-3 p-3">
+                {selectedHex.pieceDetailsByPlayer.length > 0 ? (
+                  <div className="space-y-3">
+                    {selectedHex.pieceDetailsByPlayer.map((group) => (
+                      <div key={`pieces-${group.playerId}`}>
+                        <h4 className={cn("text-xs font-black uppercase tracking-[0.12em]", factionColorClass(group.factionColor))}>
+                          {group.factionLabel} pieces
+                        </h4>
+                        <div className="mt-2 flex flex-wrap gap-3">
+                          {group.pieces.map((piece) => (
+                            <div
+                              key={piece.id}
+                              className="relative flex h-16 w-16 items-center justify-center"
+                            >
+                              <img
+                                src={piece.tokenPath}
+                                alt={`${group.factionLabel} ${piece.kind}`}
+                                className="select-none object-contain"
+                                style={{
+                                  width: `${defaultPieceScale(piece.kind)}px`,
+                                  height: `${defaultPieceScale(piece.kind)}px`,
+                                }}
+                              />
                             </div>
                           ))}
                         </div>
@@ -563,13 +501,42 @@ export function BoardMap({
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-muted">No resources are on this hex.</p>
+                  <p className="text-xs text-muted">No pieces on this hex</p>
+                )}
+              </section>
+
+              <section className="rounded-xl border border-border bg-surface-3 p-3">
+                <h4 className="text-xs font-black uppercase tracking-[0.18em] text-foreground">Resources</h4>
+                {selectedHex.resourceDetailsByPlayer.length > 0 ? (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {selectedHex.resourceDetailsByPlayer.map((group) =>
+                      group.resources.map((resource) =>
+                        Array.from({ length: resource.count }).map((_, index) => (
+                          <div
+                            key={`${group.playerId}-${resource.type}-${index}`}
+                            className="flex items-center justify-center"
+                            style={{ width: `${defaultPieceScale("resource") * 0.75}px`, height: `${defaultPieceScale("resource") * 0.75}px` }}
+                          >
+                            <img
+                              src={resource.tokenPath}
+                              alt={resource.type}
+                              className="object-contain"
+                              style={{ maxWidth: "100%", maxHeight: "100%" }}
+                            />
+                          </div>
+                        ))
+                      )
+                    )}
+                  </div>
+                ) : (
+                  <p className="mt-2 text-xs text-muted">No resources on this hex</p>
                 )}
               </section>
             </div>
           </div>
+        ) : null}
         </div>
-      ) : null}
+      </div>
     </>
   );
 }
