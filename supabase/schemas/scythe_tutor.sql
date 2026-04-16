@@ -84,6 +84,7 @@ create table if not exists public.subtype_attempt_events (
   subtype_id text not null,
   is_correct boolean not null,
   first_try_correct boolean not null,
+  had_factory boolean,
   created_at timestamptz not null default timezone('utc', now())
 );
 

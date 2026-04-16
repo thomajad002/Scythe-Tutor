@@ -71,3 +71,36 @@ export async function getTutorProgressState(userId: string): Promise<TutorProgre
     skipCheckPassed: data.skip_check_passed,
   };
 }
+
+export type TerritoriesFactoryCoverage = {
+  attemptedWithFactory: boolean;
+  attemptedWithoutFactory: boolean;
+  correctWithFactory: boolean;
+  correctWithoutFactory: boolean;
+};
+
+export async function getTerritoriesFactoryCoverage(userId: string): Promise<TerritoriesFactoryCoverage> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("subtype_attempt_events")
+    .select("is_correct, had_factory")
+    .eq("user_id", userId)
+    .eq("subtype_id", "territories_scoring")
+    .not("had_factory", "is", null);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const attemptedWithFactory = (data ?? []).some((row) => row.had_factory === true);
+  const attemptedWithoutFactory = (data ?? []).some((row) => row.had_factory === false);
+  const correctWithFactory = (data ?? []).some((row) => row.had_factory === true && row.is_correct === true);
+  const correctWithoutFactory = (data ?? []).some((row) => row.had_factory === false && row.is_correct === true);
+
+  return {
+    attemptedWithFactory,
+    attemptedWithoutFactory,
+    correctWithFactory,
+    correctWithoutFactory,
+  };
+}

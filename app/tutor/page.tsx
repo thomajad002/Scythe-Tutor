@@ -12,7 +12,7 @@ import {
   submitSinglePlayerScoringAttempt,
 } from "@/lib/tutor/actions";
 import { SUBTYPE_IDS, allSubtypesMastered, isSubtypeUnlocked } from "@/lib/tutor/progression";
-import { getTutorProgressState } from "@/lib/tutor/server";
+import { getTerritoriesFactoryCoverage, getTutorProgressState } from "@/lib/tutor/server";
 import {
   getTemporaryScenarioById,
   getTemporaryScenarioForPlayerCount,
@@ -90,6 +90,30 @@ function readParam(value: string | string[] | undefined): string | null {
 function readIntParam(value: string | string[] | undefined): number | null {
   const parsed = Number.parseInt(readParam(value) ?? "", 10);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function chooseTerritoriesFactoryMode(coverage: Awaited<ReturnType<typeof getTerritoriesFactoryCoverage>>): "with_factory" | "without_factory" {
+  if (!coverage.attemptedWithFactory && !coverage.attemptedWithoutFactory) {
+    return Math.random() < 0.5 ? "with_factory" : "without_factory";
+  }
+
+  if (!coverage.attemptedWithFactory) {
+    return "with_factory";
+  }
+
+  if (!coverage.attemptedWithoutFactory) {
+    return "without_factory";
+  }
+
+  if (coverage.correctWithFactory && !coverage.correctWithoutFactory) {
+    return "without_factory";
+  }
+
+  if (!coverage.correctWithFactory && coverage.correctWithoutFactory) {
+    return "with_factory";
+  }
+
+  return Math.random() < 0.5 ? "with_factory" : "without_factory";
 }
 
 function stageAllowed(
@@ -285,15 +309,20 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
     : activeMultiplayerTarget;
 
   const subtypePlayerCount = activeSubtype === "winner_tiebreakers" ? 2 : 1;
+  const territoriesFactoryMode = activeSubtype === "territories_scoring"
+    ? chooseTerritoriesFactoryMode(await getTerritoriesFactoryCoverage(user.id))
+    : "any";
   const fallbackSubtypeScenario = await getTemporaryScenarioForPlayerCount(
     user.id,
     subtypePlayerCount,
     activeSubtype,
+    { territoriesFactoryMode },
   );
   const subtypeScenarioCandidate = requestedScenarioId
     ? await getTemporaryScenarioById(requestedScenarioId)
     : null;
-  const subtypeScenario = subtypeScenarioCandidate && subtypeScenarioCandidate.playerCount === subtypePlayerCount
+  const subtypeScenario = subtypeScenarioCandidate
+    && subtypeScenarioCandidate.playerCount === subtypePlayerCount
     ? subtypeScenarioCandidate
     : fallbackSubtypeScenario;
 
@@ -665,22 +694,21 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                     </form>
                   ))}
 
-                  <details className="space-y-2" open={structureBonusActive}>
-                    <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
-                      <div
-                        className={`w-full rounded-2xl border px-3 py-3 text-left transition-colors ${
-                          structureBonusActive
-                            ? "border-accent bg-accent/15 text-foreground"
-                            : structureBonusComplete
-                              ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-100"
-                              : "border-border bg-surface-2 text-foreground hover:bg-surface-3"
-                        }`}
-                      >
-                        <span className="block text-sm font-medium">Structure bonus</span>
-                        <span className="mt-1 block text-[11px] uppercase tracking-[0.16em] text-current/70">
-                          {structureBonusComplete ? "Mastered" : "In progress"}
-                        </span>
-                      </div>
+                  <details
+                    className={`rounded-lg border p-2 ${
+                      structureBonusActive
+                        ? "border-accent bg-accent/15"
+                        : "border-border bg-surface-2"
+                    }`}
+                    open={structureBonusActive}
+                  >
+                    <summary className="cursor-pointer list-none px-1 py-1 [&::-webkit-details-marker]:hidden">
+                      <span className="block text-center text-muted">Structure bonus</span>
+                      <span className="block text-center font-medium text-foreground">
+                        {structureBonusComplete
+                          ? "Complete"
+                          : `${structureBonusRailItems.filter((item) => item.mastered).length} complete`}
+                      </span>
                     </summary>
                     <div className="mt-2 space-y-2">
                       {structureBonusRailItems.map((item) => (

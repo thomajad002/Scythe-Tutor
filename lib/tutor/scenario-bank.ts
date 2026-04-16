@@ -95,7 +95,11 @@ export type TemporaryScenario = {
   players: TemporaryScenarioPlayer[];
 };
 
-const FACTORY_HEX_ID = 0;
+export type ScenarioSelectionOptions = {
+  territoriesFactoryMode?: "any" | "with_factory" | "without_factory";
+};
+
+const FACTORY_HEX_ID = 23;
 
 const FACTION_TO_COLOR: Record<RawScenarioPlayer["faction"], "black" | "red" | "blue" | "yellow" | "white"> = {
   saxony: "black",
@@ -433,7 +437,11 @@ function sortPlayersForTeaching(players: TemporaryScenarioPlayer[]): TemporarySc
   });
 }
 
-function filterBySubtype(scenarios: TemporaryScenario[], subtypeId?: string): TemporaryScenario[] {
+function filterBySubtype(
+  scenarios: TemporaryScenario[],
+  subtypeId?: string,
+  options: ScenarioSelectionOptions = {},
+): TemporaryScenario[] {
   if (!subtypeId) return scenarios;
   return scenarios.filter((scenario) => {
     switch (subtypeId) {
@@ -442,6 +450,12 @@ function filterBySubtype(scenarios: TemporaryScenario[], subtypeId?: string): Te
       case "stars_scoring":
         return scenario.players.some((p) => p.stars > 0);
       case "territories_scoring":
+        if (options.territoriesFactoryMode === "with_factory") {
+          return scenario.players.some((p) => p.factoryControlled);
+        }
+        if (options.territoriesFactoryMode === "without_factory") {
+          return scenario.players.some((p) => !p.factoryControlled);
+        }
         return scenario.players.some((p) => p.territories > 0 || p.factoryControlled);
       case "resources_scoring":
         return scenario.players.some((p) => p.resources > 0);
@@ -874,10 +888,11 @@ export async function getTemporaryScenarioForPlayerCount(
   userId: string,
   playerCount: number,
   subtypeId?: string,
+  options: ScenarioSelectionOptions = {},
 ): Promise<TemporaryScenario> {
   const bank = await getScenarioBank();
   const byCount = bank.filter((scenario) => scenario.playerCount === playerCount);
-  const filtered = filterBySubtype(byCount, subtypeId);
+  const filtered = filterBySubtype(byCount, subtypeId, options);
   const sourceBase = filtered.length > 0 ? filtered : byCount;
   const source = preferMidStarScenarios(sourceBase, subtypeId);
 

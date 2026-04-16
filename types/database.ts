@@ -350,6 +350,7 @@ export type Database = {
           subtype_id: string;
           is_correct: boolean;
           first_try_correct: boolean;
+          had_factory: boolean | null;
           created_at: string;
         };
         Insert: {
@@ -358,6 +359,7 @@ export type Database = {
           subtype_id: string;
           is_correct: boolean;
           first_try_correct: boolean;
+          had_factory?: boolean | null;
           created_at?: string;
         };
         Update: {
@@ -366,6 +368,7 @@ export type Database = {
           subtype_id?: string;
           is_correct?: boolean;
           first_try_correct?: boolean;
+          had_factory?: boolean | null;
           created_at?: string;
         };
         Relationships: [

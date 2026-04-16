@@ -22,7 +22,7 @@ import {
   type SubtypeAttempt,
   type SubtypeId,
 } from "@/lib/tutor/progression";
-import { getTutorProgressState } from "@/lib/tutor/server";
+import { getTerritoriesFactoryCoverage, getTutorProgressState } from "@/lib/tutor/server";
 import {
   getTemporaryScenarioById,
   getTemporaryScenarioForPlayerCount,
@@ -101,6 +101,32 @@ function chooseAdaptiveHintLevel(
   }
 
   return 1;
+}
+
+async function chooseTerritoriesFactoryMode(userId: string): Promise<"with_factory" | "without_factory"> {
+  const coverage = await getTerritoriesFactoryCoverage(userId);
+
+  if (!coverage.attemptedWithFactory && !coverage.attemptedWithoutFactory) {
+    return Math.random() < 0.5 ? "with_factory" : "without_factory";
+  }
+
+  if (!coverage.attemptedWithFactory) {
+    return "with_factory";
+  }
+
+  if (!coverage.attemptedWithoutFactory) {
+    return "without_factory";
+  }
+
+  if (coverage.correctWithFactory && !coverage.correctWithoutFactory) {
+    return "without_factory";
+  }
+
+  if (!coverage.correctWithFactory && coverage.correctWithoutFactory) {
+    return "with_factory";
+  }
+
+  return Math.random() < 0.5 ? "with_factory" : "without_factory";
 }
 
 async function getSubtypeAttemptCounts(userId: string, subtypeId: SubtypeId): Promise<{ correct: number; incorrect: number }> {
@@ -211,7 +237,11 @@ async function recomputeSubtypeProgressForUser(userId: string, subtypeId: Subtyp
     firstTryCorrect: row.first_try_correct,
   }));
 
-  const mastered = evaluateSubtypeMastery(attempts);
+  let mastered = evaluateSubtypeMastery(attempts);
+  if (subtypeId === "territories_scoring") {
+    const coverage = await getTerritoriesFactoryCoverage(userId);
+    mastered = coverage.correctWithFactory && coverage.correctWithoutFactory;
+  }
   const current = await getTutorProgressState(userId);
   const next = recomputeUnlockState({
     ...current,
@@ -397,10 +427,16 @@ export async function submitSubtypeTutorAttempt(formData: FormData) {
   }
 
   const requiredPlayerCount = subtypeId === "winner_tiebreakers" ? 2 : 1;
+  const territoriesFactoryMode = subtypeId === "territories_scoring"
+    ? await chooseTerritoriesFactoryMode(user.id)
+    : "any";
   const scenarioCandidate = await getTemporaryScenarioById(scenarioId);
-  const scenario = scenarioCandidate && scenarioCandidate.playerCount === requiredPlayerCount
+  const scenario = scenarioCandidate
+    && scenarioCandidate.playerCount === requiredPlayerCount
     ? scenarioCandidate
-    : await getTemporaryScenarioForPlayerCount(user.id, requiredPlayerCount, subtypeId);
+    : await getTemporaryScenarioForPlayerCount(user.id, requiredPlayerCount, subtypeId, {
+      territoriesFactoryMode,
+    });
 
   let isCorrect = false;
   let summary = "";
@@ -489,6 +525,7 @@ export async function submitSubtypeTutorAttempt(formData: FormData) {
     subtype_id: subtypeId,
     is_correct: isCorrect,
     first_try_correct: firstTryCorrect,
+    had_factory: subtypeId === "territories_scoring" ? scenario.players[0]?.factoryControlled === true : null,
   });
 
   if (insertError) {
@@ -783,10 +820,14 @@ export async function refreshTemporarySubtypeScenario(formData: FormData) {
   }
 
   const playerCount = subtypeId === "winner_tiebreakers" ? 2 : 1;
+  const territoriesFactoryMode = subtypeId === "territories_scoring"
+    ? await chooseTerritoriesFactoryMode(user.id)
+    : "any";
   const scenario = await getTemporaryScenarioForPlayerCount(
     `${user.id}-${Date.now()}`,
     playerCount,
     subtypeId,
+    { territoriesFactoryMode },
   );
 
   revalidatePath(TUTOR_PATH);
