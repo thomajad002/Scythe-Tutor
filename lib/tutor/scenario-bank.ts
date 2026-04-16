@@ -84,6 +84,7 @@ export type PiecePlacement = {
 export type TemporaryScenarioPlayer = MultiplayerScoringPlayerInput & {
   displayName: string;
   faction: RawScenarioPlayer["faction"];
+  controlledHexIds: number[];
 };
 
 export type TemporaryScenario = {
@@ -438,18 +439,20 @@ function controlledHexIdsForPlayer(rawPlayer: RawScenarioPlayer, playerCount: nu
 }
 
 function toPlayerInput(rawPlayer: RawScenarioPlayer, scoring: RawScoringEntry, index: number): TemporaryScenarioPlayer {
+  const controlledHexIds = rawPlayer.controlledHexIds;
   const stars = sumStars(rawPlayer.stars);
   return {
     playerId: `p${index + 1}`,
     displayName: `${rawPlayer.faction} (${index + 1})`,
     faction: rawPlayer.faction,
     stars,
-    territories: rawPlayer.controlledHexIds.length,
+    territories: controlledHexIds.length,
     resources: scoring.score.controlledResourceTokens,
     coins: rawPlayer.coinsInHand,
     popularity: rawPlayer.popularity,
     structureBonusCoins: scoring.score.structureBonusCoins,
-    factoryControlled: rawPlayer.controlledHexIds.includes(FACTORY_HEX_ID),
+    factoryControlled: controlledHexIds.includes(FACTORY_HEX_ID),
+    controlledHexIds,
     tiebreaker: {
       unitsAndStructures: scoring.tiebreakers.piecesAndStructures,
       power: scoring.tiebreakers.power,
@@ -620,6 +623,7 @@ export const getScenarioBank = cache(async (): Promise<TemporaryScenario[]> => {
             displayName: `${player.faction} (${index + 1})`,
             territories: controlledHexIds.length,
             factoryControlled: controlledHexIds.includes(FACTORY_HEX_ID),
+            controlledHexIds,
           };
         });
 
@@ -743,7 +747,7 @@ export const getScenarioBank = cache(async (): Promise<TemporaryScenario[]> => {
             true,
           );
           placements.push({
-            id: `${raw.scenarioId}-${normalizedPlayer.playerId}-character`,
+            id: `${raw.scenarioId}-${normalizedPlayer.playerId}-character-${rawPlayer.characterHexId}`,
             playerId: normalizedPlayer.playerId,
             kind: "character",
             tokenPath: tokenPathForFactionPiece(rawPlayer.faction, "character"),

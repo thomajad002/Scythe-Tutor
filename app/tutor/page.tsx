@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { BoardMap } from "@/components/tutor/board-map";
 import { CoinPile } from "@/components/tutor/coin-pile";
 import { requireUser } from "@/lib/auth/server";
+import { loadScytheBoardData } from "@/lib/scythe/board-data";
 import {
   refreshTemporaryMultiplayerScenario,
   refreshTemporarySinglePlayerScenario,
@@ -64,6 +65,19 @@ const STRUCTURE_BONUS_SUBTYPE_IDS = new Set([
   "structure_bonus_tunnel_adjacent",
   "structure_bonus_encounter_adjacent",
   "structure_bonus_lake_adjacent",
+]);
+
+const HEX_DETAIL_SUBTYPE_IDS = new Set([
+  "territories_scoring",
+  "resources_scoring",
+  "structure_bonus_farm_or_tundra",
+  "structure_bonus_tunnel_with_structures",
+  "structure_bonus_longest_structure_row",
+  "structure_bonus_tunnel_adjacent",
+  "structure_bonus_encounter_adjacent",
+  "structure_bonus_lake_adjacent",
+  "total_scoring",
+  "winner_tiebreakers",
 ]);
 
 function parseStage(value: string | null): StageId | null {
@@ -405,6 +419,8 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
     : resultMessage === "incorrect"
       ? "border-rose-500/40 bg-rose-500/10 text-rose-200"
       : "border-emerald-500/40 bg-emerald-500/10 text-emerald-200";
+  const boardData = await loadScytheBoardData();
+  const enableHexDetails = activeStage !== "subtype" || HEX_DETAIL_SUBTYPE_IDS.has(activeSubtype);
 
   return (
     <main className="mx-auto min-h-full w-full max-w-6xl px-4 py-4 sm:px-6 sm:py-5">
@@ -430,6 +446,10 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                 boardImageWidth={subtypeScenario.boardImageWidth}
                 boardImageHeight={subtypeScenario.boardImageHeight}
                 piecePlacements={subtypeBoardPlacements}
+                boardHexes={boardData.hexes}
+                players={subtypeScenario.players}
+                enableHexDetails={enableHexDetails}
+                showTouchMapLayer
                 className="w-full"
               />
 
@@ -559,6 +579,10 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                     boardImageWidth={singleScenario.boardImageWidth}
                     boardImageHeight={singleScenario.boardImageHeight}
                     piecePlacements={singleScenario.piecePlacements}
+                    boardHexes={boardData.hexes}
+                    players={singleScenario.players}
+                    enableHexDetails={enableHexDetails}
+                    showTouchMapLayer
                     className="w-full"
                   />
 
@@ -629,6 +653,10 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                     boardImageWidth={multiplayerScenario.boardImageWidth}
                     boardImageHeight={multiplayerScenario.boardImageHeight}
                     piecePlacements={multiplayerScenario.piecePlacements}
+                    boardHexes={boardData.hexes}
+                    players={multiplayerScenario.players}
+                    enableHexDetails={enableHexDetails}
+                    showTouchMapLayer
                     className="w-full"
                   />
 
