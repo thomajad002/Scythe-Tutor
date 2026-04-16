@@ -21,6 +21,7 @@ import {
   allSubtypesMastered,
   applySkipCheckResult,
   evaluateSubtypeMastery,
+  getAdaptiveWinnerTiebreakerPlayerCount,
   isSubtypeUnlocked,
   recomputeUnlockState,
   type SubtypeAttempt,
@@ -365,7 +366,12 @@ export async function submitSubtypeTutorAttempt(formData: FormData) {
     sendError("That subtype is locked until the first five are mastered.");
   }
 
-  const requiredPlayerCount = subtypeId === "winner_tiebreakers" ? 5 : 1;
+  const winnerAttempts = subtypeId === "winner_tiebreakers"
+    ? await getSubtypeAttemptHistory(user.id, "winner_tiebreakers")
+    : [];
+  const requiredPlayerCount = subtypeId === "winner_tiebreakers"
+    ? getAdaptiveWinnerTiebreakerPlayerCount(winnerAttempts)
+    : 1;
   const territoriesFactoryMode = subtypeId === "territories_scoring"
     ? await chooseTerritoriesFactoryMode(user.id)
     : "any";
@@ -760,7 +766,12 @@ export async function refreshTemporarySubtypeScenario(formData: FormData) {
     sendError("Choose a valid subtype.");
   }
 
-  const playerCount = subtypeId === "winner_tiebreakers" ? 5 : 1;
+  const winnerAttempts = subtypeId === "winner_tiebreakers"
+    ? await getSubtypeAttemptHistory(user.id, "winner_tiebreakers")
+    : [];
+  const playerCount = subtypeId === "winner_tiebreakers"
+    ? getAdaptiveWinnerTiebreakerPlayerCount(winnerAttempts)
+    : 1;
   const territoriesFactoryMode = subtypeId === "territories_scoring"
     ? await chooseTerritoriesFactoryMode(user.id)
     : "any";

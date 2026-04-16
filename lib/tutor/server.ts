@@ -3,6 +3,7 @@ import {
   INITIAL_PROGRESS_STATE,
   SUBTYPE_IDS,
   type SubtypeId,
+  type SubtypeAttemptHistoryItem,
   type TutorProgressState,
 } from "@/lib/tutor/progression";
 import { createClient } from "@/lib/supabase/server";
@@ -103,4 +104,28 @@ export async function getTerritoriesFactoryCoverage(userId: string): Promise<Ter
     correctWithFactory,
     correctWithoutFactory,
   };
+}
+
+export async function getSubtypeAttemptHistory(
+  userId: string,
+  subtypeId: SubtypeId,
+  limit = 10,
+): Promise<SubtypeAttemptHistoryItem[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("subtype_attempt_events")
+    .select("is_correct, first_try_correct")
+    .eq("user_id", userId)
+    .eq("subtype_id", subtypeId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []).map((row) => ({
+    isCorrect: row.is_correct,
+    firstTryCorrect: row.first_try_correct,
+  }));
 }

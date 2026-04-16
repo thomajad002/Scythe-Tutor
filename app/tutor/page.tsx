@@ -11,14 +11,13 @@ import {
   submitMultiplayerScoringAttempt,
   submitSinglePlayerScoringAttempt,
 } from "@/lib/tutor/actions";
-import { SUBTYPE_IDS, allSubtypesMastered, isSubtypeUnlocked } from "@/lib/tutor/progression";
-import { getTerritoriesFactoryCoverage, getTutorProgressState } from "@/lib/tutor/server";
+import { SUBTYPE_IDS, allSubtypesMastered, getAdaptiveWinnerTiebreakerPlayerCount, isSubtypeUnlocked } from "@/lib/tutor/progression";
+import { getSubtypeAttemptHistory, getTerritoriesFactoryCoverage, getTutorProgressState } from "@/lib/tutor/server";
 import {
   getTemporaryScenarioById,
   getTemporaryScenarioForPlayerCount,
   type PiecePlacement,
 } from "@/lib/tutor/scenario-bank";
-import { loadScytheBoardData } from "@/lib/scythe/board-data";
 
 const SUBTYPE_LABELS: Record<(typeof SUBTYPE_IDS)[number], string> = {
   popularity_tiers: "Popularity tiers",
@@ -288,7 +287,6 @@ function filterSubtypePlacements(
 
 export default async function TutorPage({ searchParams }: TutorPageProps) {
   const user = await requireUser();
-  const boardGeometry = await loadScytheBoardData();
   const params = searchParams ? await searchParams : {};
   const successMessage = readParam(params.success);
   const errorMessage = readParam(params.error);
@@ -319,7 +317,12 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
     ? requestedPlayers
     : activeMultiplayerTarget;
 
-  const subtypePlayerCount = activeSubtype === "winner_tiebreakers" ? 5 : 1;
+  const winnerAttempts = activeSubtype === "winner_tiebreakers"
+    ? await getSubtypeAttemptHistory(user.id, "winner_tiebreakers", 10)
+    : [];
+  const subtypePlayerCount = activeSubtype === "winner_tiebreakers"
+    ? getAdaptiveWinnerTiebreakerPlayerCount(winnerAttempts)
+    : 1;
   const territoriesFactoryMode = activeSubtype === "territories_scoring"
     ? chooseTerritoriesFactoryMode(await getTerritoriesFactoryCoverage(user.id))
     : "any";
@@ -427,8 +430,6 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                 boardImageWidth={subtypeScenario.boardImageWidth}
                 boardImageHeight={subtypeScenario.boardImageHeight}
                 piecePlacements={subtypeBoardPlacements}
-                boardGeometry={boardGeometry}
-                showDebugBorders
                 className="w-full"
               />
 
@@ -442,9 +443,6 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                     <p className="text-muted">Structure bonus {player.structureBonusCoins ?? 0}</p>
                   </div>
                 ))}
-                <div>
-                  delete section later
-                </div>
               </div>
 
               <form action={submitSubtypeTutorAttempt} className="space-y-3">
@@ -561,8 +559,6 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                     boardImageWidth={singleScenario.boardImageWidth}
                     boardImageHeight={singleScenario.boardImageHeight}
                     piecePlacements={singleScenario.piecePlacements}
-                    boardGeometry={boardGeometry}
-                    showDebugBorders
                     className="w-full"
                   />
 
@@ -633,8 +629,6 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                     boardImageWidth={multiplayerScenario.boardImageWidth}
                     boardImageHeight={multiplayerScenario.boardImageHeight}
                     piecePlacements={multiplayerScenario.piecePlacements}
-                    boardGeometry={boardGeometry}
-                    showDebugBorders
                     className="w-full"
                   />
 

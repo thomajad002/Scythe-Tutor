@@ -23,6 +23,11 @@ export type SubtypeAttempt = {
   firstTryCorrect: boolean;
 };
 
+export type SubtypeAttemptHistoryItem = {
+  isCorrect: boolean;
+  firstTryCorrect: boolean;
+};
+
 export type TutorProgressState = {
   subtypeMastery: Partial<Record<SubtypeId, boolean>>;
   singlePlayerConsecutiveCorrect: number;
@@ -118,4 +123,47 @@ export function applySkipCheckResult(
     singlePlayerMastered: true,
     maxMultiplayerUnlocked: 5,
   });
+}
+
+export function getAdaptiveWinnerTiebreakerPlayerCount(
+  attemptsNewestFirst: SubtypeAttemptHistoryItem[],
+): 2 | 3 | 4 | 5 {
+  if (attemptsNewestFirst.length === 0) {
+    return 2;
+  }
+
+  const lastOne = attemptsNewestFirst[0];
+  if (attemptsNewestFirst.length === 1) {
+    return lastOne?.isCorrect ? 3 : 2;
+  }
+
+  const lastThree = attemptsNewestFirst.slice(0, 3);
+  if (lastThree.length === 3 && lastThree.every((attempt) => attempt.isCorrect)) {
+    return 5;
+  }
+
+  const lastTwo = attemptsNewestFirst.slice(0, 2);
+  if (lastTwo.every((attempt) => attempt.isCorrect)) {
+    return 4;
+  }
+
+  const recent = attemptsNewestFirst.slice(0, 6);
+  const correctCount = recent.filter((attempt) => attempt.isCorrect).length;
+  const firstTryCorrectCount = recent.filter((attempt) => attempt.isCorrect && attempt.firstTryCorrect).length;
+  const accuracy = correctCount / recent.length;
+  const firstTryAccuracy = firstTryCorrectCount / recent.length;
+
+  if (accuracy >= 0.8 && firstTryAccuracy >= 0.6) {
+    return 5;
+  }
+
+  if (accuracy >= 0.65) {
+    return 4;
+  }
+
+  if (accuracy >= 0.5) {
+    return 3;
+  }
+
+  return 2;
 }

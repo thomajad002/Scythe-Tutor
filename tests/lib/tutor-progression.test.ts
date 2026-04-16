@@ -3,6 +3,7 @@ import {
   allSubtypesMastered,
   applySkipCheckResult,
   evaluateSubtypeMastery,
+  getAdaptiveWinnerTiebreakerPlayerCount,
   isSubtypeUnlocked,
   recomputeUnlockState,
   type SubtypeAttempt,
@@ -112,5 +113,44 @@ describe("unlock model", () => {
     expect(progress.tutorialCompleted).toBe(true);
     expect(progress.speedChallengeUnlocked).toBe(true);
     expect(progress.maxMultiplayerUnlocked).toBe(5);
+  });
+});
+
+describe("getAdaptiveWinnerTiebreakerPlayerCount", () => {
+  it("starts at 2 players for new learners", () => {
+    expect(getAdaptiveWinnerTiebreakerPlayerCount([])).toBe(2);
+  });
+
+  it("ramps up quickly after early correct attempts", () => {
+    expect(getAdaptiveWinnerTiebreakerPlayerCount([
+      { isCorrect: true, firstTryCorrect: false },
+    ])).toBe(3);
+
+    expect(getAdaptiveWinnerTiebreakerPlayerCount([
+      { isCorrect: true, firstTryCorrect: false },
+      { isCorrect: true, firstTryCorrect: true },
+    ])).toBe(4);
+  });
+
+  it("drops back down when recent accuracy is weak", () => {
+    expect(getAdaptiveWinnerTiebreakerPlayerCount([
+      { isCorrect: false, firstTryCorrect: false },
+      { isCorrect: false, firstTryCorrect: false },
+      { isCorrect: true, firstTryCorrect: false },
+      { isCorrect: false, firstTryCorrect: false },
+      { isCorrect: false, firstTryCorrect: false },
+      { isCorrect: true, firstTryCorrect: false },
+    ])).toBe(2);
+  });
+
+  it("reaches 5 players for strong mastery", () => {
+    expect(getAdaptiveWinnerTiebreakerPlayerCount([
+      { isCorrect: true, firstTryCorrect: true },
+      { isCorrect: true, firstTryCorrect: true },
+      { isCorrect: true, firstTryCorrect: false },
+      { isCorrect: true, firstTryCorrect: true },
+      { isCorrect: true, firstTryCorrect: true },
+      { isCorrect: true, firstTryCorrect: true },
+    ])).toBe(5);
   });
 });
