@@ -18,7 +18,7 @@ import { getTutorProgressState } from "@/lib/tutor/server";
 import {
   getTemporaryScenarioById,
   getTemporaryScenarioForPlayerCount,
-} from "@/lib/tutor/temp-scenarios";
+} from "@/lib/tutor/scenario-bank";
 
 const SUBTYPE_LABELS: Record<(typeof SUBTYPE_IDS)[number], string> = {
   popularity_tiers: "Popularity tiers",
@@ -395,7 +395,7 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                     <p>Popularity: {singleScenario.players[0].popularity}</p>
                     <p>Factory controlled: {singleScenario.players[0].factoryControlled ? "Yes" : "No"}</p>
                     <p>Structure bonus: {singleScenario.players[0].structureBonusCoins ?? 0}</p>
-                    <p className="sm:col-span-2 lg:col-span-3">Temporary unit hexes: {singleScenario.players[0].temporaryLocations.unitHexes.join(", ")}</p>
+                    <p className="sm:col-span-2 lg:col-span-3">Faction: {singleScenario.players[0].faction}</p>
                   </div>
 
                   <form action={submitSinglePlayerScoringAttempt} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

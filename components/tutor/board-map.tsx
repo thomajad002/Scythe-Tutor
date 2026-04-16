@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils/cn";
-import type { PieceKind, PiecePlacement } from "@/lib/tutor/temp-scenarios";
+import type { PieceKind, PiecePlacement } from "@/lib/tutor/scenario-bank";
 
 type BoardMapProps = {
   boardImagePath: string;

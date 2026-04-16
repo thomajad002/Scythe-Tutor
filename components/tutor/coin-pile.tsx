@@ -105,7 +105,7 @@ export function CoinPile({ scenarioId, players }: CoinPileProps) {
             </div>
 
             {sortedView ? (
-              <div className="grid grid-cols-4 gap-1">
+              <div className="grid grid-cols-4 gap-2">
                 {DENOMINATIONS.map((denomination) => {
                   const count = player.tokens.filter((token) => token.denomination === denomination).length;
                   return (
@@ -122,7 +122,7 @@ export function CoinPile({ scenarioId, players }: CoinPileProps) {
                         }.webp`}
                         alt={`${denomination} coin`}
                         className="mx-auto h-6 w-6 object-contain"
-                        style={{ width: "24px", height: "24px" }}
+                        style={{ width: "26px", height: "26px" }}
                       />
                       <p className="text-[10px] text-muted">x{count}</p>
                     </div>
@@ -130,7 +130,7 @@ export function CoinPile({ scenarioId, players }: CoinPileProps) {
                 })}
               </div>
             ) : (
-              <div className="flex flex-wrap items-center gap-0.5 overflow-hidden">
+              <div className="flex flex-wrap items-center gap-x-1 gap-y-1 overflow-hidden">
                 {player.tokens.map((token, index) => (
                   <img
                     key={`${player.playerId}-${token.id}-${index}`}
@@ -138,9 +138,9 @@ export function CoinPile({ scenarioId, players }: CoinPileProps) {
                     alt={`${token.denomination} coin ${token.face}`}
                     className="h-5 w-5 -rotate-2 object-contain"
                     style={{
-                      width: "20px",
-                      height: "20px",
-                      marginLeft: index % 5 === 0 ? 0 : -7,
+                      width: "22px",
+                      height: "22px",
+                      marginLeft: index % 5 === 0 ? 0 : -4,
                       transform: `rotate(${(index % 7) - 3}deg)`,
                     }}
                   />

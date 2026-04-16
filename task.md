@@ -20,25 +20,25 @@
 - [x] Implement progression gates: subtype -> single-player -> 2-5 players.
 
 ## Proposal Alignment Checklist
-- [ ] Teach scoring categories (stars, territories, resources, coins).
-- [ ] Teach multiplier application by popularity.
-- [ ] Teach accurate component and total computation.
-- [ ] Support correction of common mistakes.
-- [ ] Support sequential reasoning and attention-to-detail practice.
-- [ ] Provide immediate step-level feedback.
-- [ ] Provide adaptive support via learner model (minimum: mastery tracking).
-- [ ] Support complete end-game scoring flow including structure bonus and tiebreakers.
+- [x] Teach scoring categories (stars, territories, resources, coins).
+- [x] Teach multiplier application by popularity.
+- [x] Teach accurate component and total computation.
+- [x] Support correction of common mistakes.
+- [x] Support sequential reasoning and attention-to-detail practice.
+- [x] Provide immediate step-level feedback.
+- [x] Provide adaptive support via learner model (minimum: mastery tracking).
+- [x] Support complete end-game scoring flow including structure bonus and tiebreakers.
 
 ## Stretch Goals
-- [ ] Adaptive problem selection (outer loop ITS).
-- [ ] Timed speedrun mode.
-- [ ] Optional LLM hint wording (correctness remains rule-based).
+- [ ] Adaptive problem selection (outer loop ITS) - partial (infrastructure in place, full adaptation pending)
+- [ ] Timed speedrun mode - partial (unlock gate in place, interactive implementation pending)
+- [ ] Optional LLM hint wording (correctness remains rule-based) - not started
 
 ## Ongoing Rule
 - [x] Each significant change must include a corresponding `README.md` update.
 
 ## Submission Readiness
-- [ ] End-to-end flow works from login -> tutor -> progress.
+- [x] End-to-end flow works from login -> tutor -> progress.
 - [x] Automated tests pass.
-- [ ] README reflects architecture, setup, routes, and testing.
-- [ ] Features map cleanly to all five proposal sections.
+- [x] README reflects architecture, setup, routes, and testing.
+- [x] Features map cleanly to all five proposal sections.

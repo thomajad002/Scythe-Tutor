@@ -25,7 +25,7 @@ import { getTutorProgressState } from "@/lib/tutor/server";
 import {
   getTemporaryScenarioById,
   getTemporaryScenarioForPlayerCount,
-} from "@/lib/tutor/temp-scenarios";
+} from "@/lib/tutor/scenario-bank";
 import { createClient } from "@/lib/supabase/server";
 
 const TUTOR_PATH = "/tutor";
@@ -678,7 +678,11 @@ export async function refreshTemporarySubtypeScenario(formData: FormData) {
   }
 
   const playerCount = subtypeId === "winner_tiebreakers" ? 2 : 1;
-  const scenario = await getTemporaryScenarioForPlayerCount(`${user.id}-${Date.now()}`, playerCount);
+  const scenario = await getTemporaryScenarioForPlayerCount(
+    `${user.id}-${Date.now()}`,
+    playerCount,
+    subtypeId,
+  );
 
   revalidatePath(TUTOR_PATH);
   redirect(

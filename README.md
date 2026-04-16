@@ -26,6 +26,17 @@ Completed in current milestone:
 - Added temporary board-state scenario sourcing with deterministic scenario bank selection for tutor rounds
 - Implemented layered hint levels (L1/L2/L3), decomposition summaries, and winner/tiebreaker evaluation
 - Extended scoring engine to include Factory territory handling (+2 territory equivalent when controlled) and structure bonus coins
+- Replaced procedural scenario generation with 120 real game scenarios (`data/games/scythe_scenarios.json`)
+  - 20 scenarios per structure bonus tile (6 tiles total)
+  - Complete game state data per player: units, structures, resources, popularity, power
+  - Scenarios feature all 5 factions across varied board states
+- Implemented scenario data loader (`lib/tutor/scenario-bank.ts`)
+  - Converts raw game state to scoring inputs (stars, territories, resources, coins)
+  - Handles Factory territory bonus calculation
+  - Sorts players by estimated score for proper difficulty progression
+- Updated scenario bank to serve real scenarios with player-count variants (1-5 players)
+  - Maintains visualization rendering for all pieces and track positions
+  - Supports filtering by structure bonus tile for targeted practice
 
 Starter foundation retained:
 
@@ -197,10 +208,110 @@ Server Actions request size is configured to `10mb`, and app-level avatar valida
 - [components/ui](components/ui): reusable primitive UI components
 - [lib/auth](lib/auth): auth actions and server helpers
 - [lib/supabase](lib/supabase): Supabase client/middleware utilities
+- [lib/scythe](lib/scythe): Scythe scoring engine and domain logic
+- [lib/tutor](lib/tutor): Tutor progression, scenario loading, and server actions
 - [hooks](hooks): reusable React hooks
 - [types](types): shared TypeScript database types
 - [tests](tests): unit tests
+- [data/games](data/games): Real Scythe scenario data (120 scenarios, 20 per structure bonus tile)
 - [assets.md](assets.md): asset planning checklist and naming conventions
+
+## Tutor Flow and Learner Progression
+
+The `/tutor` route implements a gated, stage-by-stage learning progression:
+
+### Stage 1: Skip-Check Assessment (Optional Bypass)
+- One full-game scoring scenario with all players
+- If perfect: tutorial is bypassed, speed challenge unlocks immediately
+- If not perfect: learner enters guided mastery path with low-scoring components highlighted
+
+### Stage 2: Subtype Mastery (Guided Deep Dive)
+Seven knowledge components are taught individually:
+1. **Popularity Tiers**: Learn to classify popularity into low (0-6), mid (7-12), high (13-18) ranges
+2. **Stars Scoring**: Calculate star coins using popularity tier multipliers (3/4/5)
+3. **Territories Scoring**: Count controlled territories, handle Factory +3 territories bonus
+4. **Resources Scoring**: Count resource pairs and apply popularity multiplier (1/2/3 coins per pair)
+5. **Structure Bonus Scoring**: Award coins based on structure bonus tile achievement
+6. **Total Scoring**: Sum all components correctly (no multiplier on coins or structure bonus)
+7. **Winner & Tiebreakers**: Determine winner and apply tiebreaker order when scores are tied
+
+Each subtype:
+- Uses scenarios from [data/games/scythe_scenarios.json](data/games/scythe_scenarios.json)
+- Provides 1-2 player scenarios with immediate feedback
+- Offers layered hints (L1 conceptual, L2 targeted cue, L3 near-explicit)
+- Requires 2 consecutive correct answers to mark mastery
+
+### Stage 3: Single-Player Integration
+- Full end-to-end score calculation for one player
+- Must demonstrate 2 consecutive correct full-game calculations
+- Unlocks multiplayer progression
+
+### Stage 4: Multiplayer Progression (2-5 Players)
+- Start with 2-player scenarios
+- After one correct full-round calculation, unlock +1 player
+- Progress to 3, 4, and finally 5 players
+- Each round features multiple players scoring and tiebreaker resolution
+
+### Stage 5: Speed Challenge (Stretch Goal)
+- Unlocked after mastery path completion or perfect skip-check
+- Future: timed full-game rounds with pressure-based fluency training
+
+### Scenario and Player Selection Strategy
+- **Subtype teaching**: Random scenarios from the 120-scenario bank, 1-2 players as needed
+- **Multiplayer scenarios**: Players sorted by estimated score (highest first) to ensure graduated difficulty
+- **Structure bonus tile support**: Can select specific scenarios by their structure bonus type (tunnel_adjacent, lake_adjacent, etc.)
+
+## Scenario Data Structure
+
+All practice scenarios come from [data/games/scythe_scenarios.json](data/games/scythe_scenarios.json):
+
+- **120 total scenarios**: 20 scenarios per structure bonus tile type
+- **Complete game state**: Each player includes:
+  - Unit counts (workers, mechs, character position)
+  - Controlled hexes and structure placements
+  - Resource distribution on controlled territories
+  - Power and popularity values
+  - Star counts by category
+- **Pre-calculated scoring**: Each scenario includes correct scores and tiebreaker stats
+- **Faction diversity**: All 5 factions represented across varied board states
+
+Scenario files are loaded via [lib/tutor/scenario-bank.ts](lib/tutor/scenario-bank.ts) which:
+- Converts raw game state to scoring inputs (stars, territories, resources, coins)
+- Calculates Factory territory bonus (+2 effective territories if controlled)
+- Extracts structure bonus coins from scenario scoring data
+- Sorts players by estimated score for difficulty progression
+
+## Features Mapped to Proposal Sections
+
+### 1. Teaching Scoring Categories
+✅ **Subtypes 1-5** teach stars, territories, resources, coins, and structure bonus independently
+✅ **Subtype 6** teaches accurate total computation by summing all components
+✅ Real scenarios from JSON provide authentic practice contexts
+
+### 2. Teaching Multiplier Application by Popularity
+✅ **Subtype 1** explicitly teaches popularity tier classification  
+✅ **Subtypes 2-4** show multiplier application (3/4/5 for stars, 2/3/4 for territories, 1/2/3 for resource pairs)
+✅ Hints explain the tier-based lookup table with concrete examples
+
+### 3. Teaching Accurate Component and Total Computation
+✅ **Subtype 4** dedicated to territories including Factory rule (3 territories = 1 Factory)
+✅ **Subtype 6** forces component-by-component breakdown followed by summation
+✅ Error classification detects incorrect multipliers, arithmetic, and omitted categories
+
+### 4. Supporting Correction of Common Mistakes
+✅ **Error classification** in [lib/scythe/scoring.ts](lib/scythe/scoring.ts) identifies:
+  - Incorrect multiplier application
+  - Resource pair miscounting
+  - Arithmetic/sum errors
+  - Omitted categories
+✅ **Layered hints** provide step-by-step correction guidance
+✅ Immediate feedback on each step prevents error propagation
+
+### 5. Supporting Sequential Reasoning and Attention-to-Detail Practice
+✅ **Subtype progression** from simple (popularity tiers) to complex (full game + tiebreakers)
+✅ **Single-player gate** enforces fluency before multiplayer complexity
+✅ **Multiplayer 2-5 progression** gradually increases cognitive load
+✅ High-quality real scenarios require careful attention to all details
 
 ## Theme + Styling
 
@@ -300,13 +411,6 @@ Checklist:
 	 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 	 - `NEXT_PUBLIC_SITE_URL`
 5. Confirm auth redirect URLs in Supabase Auth settings match production domain.
-
-## How to Reuse This Starter
-
-1. Copy this repository or select this template from new github project.
-2. Run `./setup.sh`.
-3. Update naming/routes/components as desired.
-4. Keep database changes declarative in `supabase/schemas/` and generate migrations.
 
 ## Troubleshooting
 
