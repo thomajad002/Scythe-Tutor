@@ -140,6 +140,70 @@ function starTokenDimensions(seed: string): { widthPercent: number; heightPercen
   return { widthPercent, heightPercent };
 }
 
+function resolveStarSlots(
+  stars: Record<string, number>,
+  starSlots: Array<{
+    index: number;
+    key?: string;
+    rectangle: {
+      points: Array<{ x: number; y: number }>;
+      center: { x: number; y: number };
+      rotationDegrees?: number;
+    };
+  }>,
+): Array<{
+  index: number;
+  key?: string;
+  rectangle: {
+    points: Array<{ x: number; y: number }>;
+    center: { x: number; y: number };
+    rotationDegrees?: number;
+  };
+}> {
+  const byKey = new Map(starSlots.map((slot) => [slot.key, slot]));
+  const selected: typeof starSlots = [];
+
+  const addIfPresent = (key: string, count = 1) => {
+    const slot = byKey.get(key);
+    if (!slot) {
+      return;
+    }
+    for (let i = 0; i < count; i += 1) {
+      selected.push(slot);
+    }
+  };
+
+  if ((stars.upgrades ?? 0) > 0) addIfPresent("upgrades");
+  if ((stars.mechs ?? 0) > 0) addIfPresent("mechs");
+  if ((stars.structures ?? 0) > 0) addIfPresent("structures");
+  if ((stars.recruits ?? 0) > 0) addIfPresent("recruits");
+  if ((stars.workers ?? 0) > 0) addIfPresent("workers");
+  if ((stars.objective ?? 0) > 0) addIfPresent("objective");
+
+  const combatStars = clamp(stars.combat ?? 0, 0, 2);
+  if (combatStars >= 1) addIfPresent("combat_1");
+  if (combatStars >= 2) addIfPresent("combat_2");
+
+  if ((stars.popularity ?? 0) > 0) addIfPresent("popularity_18");
+  if ((stars.power ?? 0) > 0) addIfPresent("strength_16");
+
+  if (selected.length > 0) {
+    return selected;
+  }
+
+  const fallbackCount = sumStars(stars);
+  const fallback: typeof starSlots = [];
+  for (let i = 1; i <= fallbackCount; i += 1) {
+    const slot = starSlots.find((candidate) => candidate.index === i)
+      ?? starSlots[Math.min(i, starSlots.length - 1)];
+    if (slot) {
+      fallback.push(slot);
+    }
+  }
+
+  return fallback;
+}
+
 function sumStars(stars: Record<string, number>): number {
   return Object.values(stars).reduce((sum, value) => sum + value, 0);
 }
@@ -246,6 +310,10 @@ function samplePointInPolygonAvoiding(
 
   const rng = mulberry32(hashString(seedKey));
   const bounds = polygonBounds(points);
+  const boundsWidth = bounds.maxX - bounds.minX;
+  const boundsHeight = bounds.maxY - bounds.minY;
+  const marginX = Math.min(radius * 0.9, boundsWidth * 0.45);
+  const marginY = Math.min(radius * 0.9, boundsHeight * 0.45);
   let bestCandidate: HexPoint | null = null;
   let bestScore = -Infinity;
 
@@ -259,6 +327,15 @@ function samplePointInPolygonAvoiding(
     };
 
     if (!pointInPolygon(candidate, points)) {
+      continue;
+    }
+
+    const insideInsetBounds =
+      candidate.x >= bounds.minX + marginX
+      && candidate.x <= bounds.maxX - marginX
+      && candidate.y >= bounds.minY + marginY
+      && candidate.y <= bounds.maxY - marginY;
+    if (!insideInsetBounds) {
       continue;
     }
 
@@ -599,10 +676,9 @@ export const getScenarioBank = cache(async (): Promise<TemporaryScenario[]> => {
           occupied.push({ point, radius: boxOccupancyRadius(strengthBox.widthPercent, strengthBox.heightPercent) });
         }
 
-        const starValue = sumStars(rawPlayer.stars);
-        for (let starIndex = 1; starIndex <= starValue; starIndex += 1) {
-          const starSlot = starSlots.find((slot) => slot.index === starIndex)
-            ?? starSlots[Math.min(starIndex, starSlots.length - 1)];
+        const starPlacementSlots = resolveStarSlots(rawPlayer.stars, starSlots);
+        for (let starIndex = 0; starIndex < starPlacementSlots.length; starIndex += 1) {
+          const starSlot = starPlacementSlots[starIndex];
           if (!starSlot) {
             continue;
           }
@@ -610,13 +686,13 @@ export const getScenarioBank = cache(async (): Promise<TemporaryScenario[]> => {
           const starBox = boxFromPoints(starSlot.rectangle.points);
           const point = samplePointInPolygonAvoiding(
             starSlot.rectangle.points,
-            `${raw.scenarioId}-${normalizedPlayer.playerId}-stars-${starIndex}`,
+            `${raw.scenarioId}-${normalizedPlayer.playerId}-stars-${starIndex + 1}`,
             occupied,
             boxOccupancyRadius(starBox.widthPercent, starBox.heightPercent),
             true,
           );
           placements.push({
-            id: `${raw.scenarioId}-${normalizedPlayer.playerId}-stars-${starIndex}`,
+            id: `${raw.scenarioId}-${normalizedPlayer.playerId}-stars-${starIndex + 1}`,
             playerId: normalizedPlayer.playerId,
             kind: "star",
             tokenPath: tokenPathForFactionPiece(rawPlayer.faction, "star"),
@@ -624,7 +700,7 @@ export const getScenarioBank = cache(async (): Promise<TemporaryScenario[]> => {
             y: point.y,
             boxWidthPercent: starBox.widthPercent,
             boxHeightPercent: starBox.heightPercent,
-            ...starTokenDimensions(`${raw.scenarioId}-${normalizedPlayer.playerId}-stars-${starIndex}`),
+            ...starTokenDimensions(`${raw.scenarioId}-${normalizedPlayer.playerId}-stars-${starIndex + 1}`),
             boxRotationDeg: starSlot.rectangle.rotationDegrees ?? 0,
           });
           occupied.push({ point, radius: boxOccupancyRadius(starBox.widthPercent, starBox.heightPercent) });
