@@ -1,19 +1,17 @@
-import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { BoardMap } from "@/components/tutor/board-map";
 import { CoinPile } from "@/components/tutor/coin-pile";
 import { requireUser } from "@/lib/auth/server";
 import {
-  refreshTemporarySubtypeScenario,
   refreshTemporaryMultiplayerScenario,
   refreshTemporarySinglePlayerScenario,
+  refreshTemporarySubtypeScenario,
   submitSubtypeTutorAttempt,
   submitMultiplayerScoringAttempt,
   submitSinglePlayerScoringAttempt,
-  submitSkipCheckAssessment,
 } from "@/lib/tutor/actions";
-import { SUBTYPE_IDS, allSubtypesMastered } from "@/lib/tutor/progression";
+import { SUBTYPE_IDS, allSubtypesMastered, isSubtypeUnlocked } from "@/lib/tutor/progression";
 import { getTutorProgressState } from "@/lib/tutor/server";
 import {
   getTemporaryScenarioById,
@@ -35,11 +33,10 @@ type TutorPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 
-type StageId = "subtype" | "skip-check" | "single-player" | "multiplayer" | "speed";
+type StageId = "subtype" | "single-player" | "multiplayer" | "speed";
 
 const STAGE_LABELS: Record<StageId, string> = {
   subtype: "1. Subtype Mastery",
-  "skip-check": "Skip Check",
   "single-player": "2. Single Player",
   multiplayer: "3. Multiplayer",
   speed: "4. Speed Challenge",
@@ -88,8 +85,6 @@ function stageAllowed(
   switch (stage) {
     case "subtype":
       return true;
-    case "skip-check":
-      return !progress.tutorialCompleted;
     case "single-player":
       return progress.skipCheckPassed || masteredAllSubtypes;
     case "multiplayer":
@@ -146,7 +141,9 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
 
   const masteredCount = SUBTYPE_IDS.filter((subtypeId) => progress.subtypeMastery[subtypeId]).length;
   const nextSubtype = SUBTYPE_IDS.find((subtypeId) => !progress.subtypeMastery[subtypeId]) ?? SUBTYPE_IDS[0];
-  const activeSubtype = requestedSubtypeId ?? nextSubtype;
+  const activeSubtype = requestedSubtypeId && isSubtypeUnlocked(requestedSubtypeId, progress.subtypeMastery)
+    ? requestedSubtypeId
+    : nextSubtype;
   const singlePlayerUnlocked = progress.skipCheckPassed || masteredAllSubtypes;
   const multiplayerUnlocked = progress.skipCheckPassed || progress.singlePlayerMastered;
   const activeMultiplayerTarget = Math.max(2, Math.min(5, progress.maxMultiplayerUnlocked));
@@ -192,6 +189,20 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
       : activeStage === "subtype"
         ? subtypeScenario.id
         : singleScenario.id;
+  const subtypeRailItems = SUBTYPE_IDS.map((subtypeId) => {
+    const mastered = progress.subtypeMastery[subtypeId] === true;
+    const locked = !isSubtypeUnlocked(subtypeId, progress.subtypeMastery);
+
+    return {
+      subtypeId,
+      mastered,
+      locked,
+      active: activeSubtype === subtypeId,
+    };
+  });
+  const activeSubtypeMastered = progress.subtypeMastery[activeSubtype] === true;
+  const moveOnSubtype = SUBTYPE_IDS.find((subtypeId) => !progress.subtypeMastery[subtypeId] && subtypeId !== activeSubtype)
+    ?? nextSubtype;
 
   return (
     <main className="mx-auto min-h-full w-full max-w-6xl px-4 py-4 sm:px-6 sm:py-5">
@@ -199,90 +210,16 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
         <Card className="space-y-4">
           <div className="space-y-2">
             <p className="text-xs uppercase tracking-[0.2em] text-accent-strong">Guided Mastery Track</p>
-            <h1 className="text-3xl">Scythe Tutor</h1>
-            <p className="text-sm text-muted">
-              Gate order: subtypes -&gt; single-player -&gt; multiplayer 2-5 -&gt; speed challenge.
-            </p>
-          </div>
 
-          {successMessage ? (
-            <p className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm text-emerald-200">
-              {successMessage}
-            </p>
-          ) : null}
-          {errorMessage ? (
-            <p className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-200">
-              {errorMessage}
-            </p>
-          ) : null}
-          {summaryMessage ? (
-            <p className="rounded-xl border border-sky-500/40 bg-sky-500/10 p-3 text-sm text-sky-200">
-              {summaryMessage}
-            </p>
-          ) : null}
-          {hintsMessage ? (
-            <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-200">
-              Hints: {hintsMessage}
-            </p>
-          ) : null}
-
-          <div className="flex flex-wrap gap-2">
-            {(Object.keys(STAGE_LABELS) as StageId[]).map((stage) => {
-              const allowed = stageAllowed(stage, progress, masteredAllSubtypes);
-              const active = activeStage === stage;
-
-              return (
-                <Link
-                  key={stage}
-                  href={`/tutor?stage=${encodeURIComponent(stage)}`}
-                  aria-disabled={!allowed}
-                  className={`rounded-lg border px-3 py-2 text-xs tracking-[0.04em] ${
-                    active
-                      ? "border-accent bg-accent text-[#201407]"
-                      : allowed
-                        ? "border-border bg-surface-2 text-foreground"
-                        : "cursor-not-allowed border-border/40 bg-surface-2/40 text-muted"
-                  }`}
-                >
-                  {STAGE_LABELS[stage]}
-                </Link>
-              );
-            })}
           </div>
 
           {activeStage === "subtype" ? (
             <div className="space-y-4">
-              <h2 className="text-2xl">Walkthrough: Subtype Mastery</h2>
-              <p className="text-sm text-muted">
-                Focus on one subtype at a time. Current target: <span className="text-foreground">{SUBTYPE_LABELS[activeSubtype]}</span>
-              </p>
-
-              <form method="get" className="flex flex-wrap items-end gap-2 rounded-lg border border-border bg-surface-2 p-3">
-                <input type="hidden" name="stage" value="subtype" />
-                <label className="text-sm text-muted">
-                  Review subtype
-                  <select
-                    name="subtype"
-                    defaultValue={activeSubtype}
-                    className="mt-1 min-w-[220px] rounded-lg border border-border bg-surface px-3 py-2 text-foreground"
-                  >
-                    {SUBTYPE_IDS.map((subtypeId) => (
-                      <option key={subtypeId} value={subtypeId}>{SUBTYPE_LABELS[subtypeId]}</option>
-                    ))}
-                  </select>
-                </label>
-                <Button type="submit" variant="secondary">Load Subtype</Button>
-              </form>
-
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {SUBTYPE_IDS.map((subtypeId) => (
-                  <div key={subtypeId} className="rounded-lg border border-border bg-surface-2 p-3 text-sm">
-                    <p className="text-muted">{SUBTYPE_LABELS[subtypeId]}</p>
-                    <p className={`mt-1 font-medium ${progress.subtypeMastery[subtypeId] ? "text-emerald-300" : "text-amber-200"}`}>
-                      {progress.subtypeMastery[subtypeId] ? "Mastered" : "In progress"}
-                    </p>
-                  </div>
-                ))}
+              <div className="space-y-2">
+                <h2 className="text-2xl">Walkthrough: Subtype Mastery</h2>
+                <p className="text-sm text-muted">
+                  Focus on one subtype at a time. Current target: <span className="text-foreground">{SUBTYPE_LABELS[activeSubtype]}</span>
+                </p>
               </div>
 
               <p className="text-sm text-muted">Scenario <span className="text-foreground">{subtypeScenario.id}</span></p>
@@ -306,6 +243,9 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                     <p className="text-muted">Structure bonus {player.structureBonusCoins ?? 0}</p>
                   </div>
                 ))}
+                <div>
+                  delete section later
+                </div>
               </div>
 
               <form action={submitSubtypeTutorAttempt} className="space-y-3">
@@ -342,38 +282,43 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                 ) : null}
 
                 <div className="flex flex-wrap gap-2">
-                  <Button type="submit" name="hint_level" value="1">Submit (L1 Hint)</Button>
-                  <Button type="submit" name="hint_level" value="2" variant="secondary">Submit (L2 Hint)</Button>
-                  <Button type="submit" name="hint_level" value="3" variant="danger">Submit (L3 Hint)</Button>
+                  <Button type="submit">Submit Answer</Button>
                 </div>
+
+                {successMessage ? (
+                  <p className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm text-emerald-200">
+                    {successMessage}
+                  </p>
+                ) : null}
+                {errorMessage ? (
+                  <p className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-200">
+                    {errorMessage}
+                  </p>
+                ) : null}
+                {summaryMessage ? (
+                  <p className="rounded-xl border border-sky-500/40 bg-sky-500/10 p-3 text-sm text-sky-200">
+                    {summaryMessage}
+                  </p>
+                ) : null}
+                {hintsMessage ? (
+                  <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-200">
+                    Hints: {hintsMessage}
+                  </p>
+                ) : null}
               </form>
 
-              <form action={refreshTemporarySubtypeScenario}>
-                <input type="hidden" name="subtype_id" value={activeSubtype} />
-                <Button type="submit" variant="secondary">Load Different Temporary Scenario</Button>
-              </form>
-            </div>
-          ) : null}
-
-          {activeStage === "skip-check" ? (
-            <div className="space-y-4">
-              <h2 className="text-2xl">Walkthrough: Skip Check</h2>
-              <p className="text-sm text-muted">
-                Submit one full-game scoring assessment. Perfect means immediate tutorial completion and speed unlock.
-              </p>
-              <form action={submitSkipCheckAssessment} className="grid gap-3 sm:grid-cols-3">
-                <label className="text-sm text-muted">
-                  Total players
-                  <input className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-foreground" type="number" name="total_players" min={1} max={7} defaultValue={5} />
-                </label>
-                <label className="text-sm text-muted">
-                  Correct players
-                  <input className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-foreground" type="number" name="correct_players" min={0} max={7} defaultValue={0} />
-                </label>
-                <div className="flex items-end">
-                  <Button type="submit" fullWidth>Submit Skip Check</Button>
-                </div>
-              </form>
+              {activeSubtypeMastered ? (
+                masteredAllSubtypes ? (
+                  <form action={refreshTemporarySinglePlayerScenario}>
+                    <Button type="submit" variant="secondary">Move on to next section</Button>
+                  </form>
+                ) : (
+                  <form action={refreshTemporarySubtypeScenario}>
+                    <input type="hidden" name="subtype_id" value={moveOnSubtype} />
+                    <Button type="submit" variant="secondary">Move on to next section</Button>
+                  </form>
+                )
+              ) : null}
             </div>
           ) : null}
 
@@ -413,11 +358,30 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                     <label className="text-sm text-muted">Structure bonus points<input className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-foreground" type="number" name="structure_bonus" required /></label>
                     <label className="text-sm text-muted">Total<input className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-foreground" type="number" name="total" required /></label>
                     <div className="flex flex-wrap gap-2 sm:col-span-2 lg:col-span-3">
-                      <Button type="submit" name="hint_level" value="1">Submit (L1 Hint)</Button>
-                      <Button type="submit" name="hint_level" value="2" variant="secondary">Submit (L2 Hint)</Button>
-                      <Button type="submit" name="hint_level" value="3" variant="danger">Submit (L3 Hint)</Button>
+                      <Button type="submit">Submit Answer</Button>
                     </div>
                   </form>
+
+                  {successMessage ? (
+                    <p className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm text-emerald-200">
+                      {successMessage}
+                    </p>
+                  ) : null}
+                  {errorMessage ? (
+                    <p className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-200">
+                      {errorMessage}
+                    </p>
+                  ) : null}
+                  {summaryMessage ? (
+                    <p className="rounded-xl border border-sky-500/40 bg-sky-500/10 p-3 text-sm text-sky-200">
+                      {summaryMessage}
+                    </p>
+                  ) : null}
+                  {hintsMessage ? (
+                    <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-200">
+                      Hints: {hintsMessage}
+                    </p>
+                  ) : null}
 
                   <form action={refreshTemporarySinglePlayerScenario}>
                     <Button type="submit" variant="secondary">Load Different Temporary Scenario</Button>
@@ -507,22 +471,99 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
             </div>
 
             <div className="grid gap-2 text-sm">
-              <div className="rounded-lg border border-border bg-surface-2 p-2">
-                <p className="text-muted">Subtypes</p>
-                <p className="font-medium">{masteredAllSubtypes ? "Complete" : `${masteredCount} complete`}</p>
-              </div>
-              <div className="rounded-lg border border-border bg-surface-2 p-2">
-                <p className="text-muted">Single-player</p>
-                <p className="font-medium">{progress.singlePlayerMastered ? "Mastered" : "In progress"}</p>
-              </div>
-              <div className="rounded-lg border border-border bg-surface-2 p-2">
-                <p className="text-muted">Multiplayer</p>
-                <p className="font-medium">Up to {progress.maxMultiplayerUnlocked} players</p>
-              </div>
-              <div className="rounded-lg border border-border bg-surface-2 p-2">
-                <p className="text-muted">Speed challenge</p>
-                <p className="font-medium">{progress.speedChallengeUnlocked ? "Unlocked" : "Locked"}</p>
-              </div>
+              <details
+                className={`rounded-lg border p-2 ${
+                  activeStage === "subtype"
+                    ? "border-accent bg-accent/15"
+                    : "border-border bg-surface-2"
+                }`}
+                open={activeStage === "subtype"}
+              >
+                <summary className="cursor-pointer list-none px-1 py-1 [&::-webkit-details-marker]:hidden">
+                  <span className="block text-center text-muted">Subtypes</span>
+                  <span className="block text-center font-medium text-foreground">{masteredAllSubtypes ? "Complete" : `${masteredCount} complete`}</span>
+                </summary>
+                <p className="mt-2 text-xs text-muted">
+                  The first five stay open in any order. The last two unlock after they are complete.
+                </p>
+                <div className="mt-3 space-y-2">
+                  {subtypeRailItems.map((item) => (
+                    <form key={item.subtypeId} method="get" action="/tutor">
+                      <input type="hidden" name="stage" value="subtype" />
+                      <input type="hidden" name="subtype" value={item.subtypeId} />
+                      <button
+                        type="submit"
+                        disabled={item.locked}
+                        className={`w-full rounded-2xl border px-3 py-3 text-left transition-colors ${
+                          item.active
+                            ? "border-accent bg-accent/15 text-foreground"
+                            : item.locked
+                              ? "border-border/40 bg-surface-2/50 text-muted"
+                              : item.mastered
+                                ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-100"
+                                : "border-border bg-surface-2 text-foreground hover:bg-surface-3"
+                        }`}
+                      >
+                        <span className="block text-sm font-medium">{SUBTYPE_LABELS[item.subtypeId]}</span>
+                        <span className="mt-1 block text-[11px] uppercase tracking-[0.16em] text-current/70">
+                          {item.locked ? "Locked" : item.mastered ? "Mastered" : "In progress"}
+                        </span>
+                      </button>
+                    </form>
+                  ))}
+                </div>
+              </details>
+              <form method="get" action="/tutor">
+                <input type="hidden" name="stage" value="single-player" />
+                <button
+                  type="submit"
+                  disabled={!stageAllowed("single-player", progress, masteredAllSubtypes)}
+                  className={`w-full rounded-lg border px-3 py-2 text-left transition-colors ${
+                    activeStage === "single-player"
+                      ? "border-accent bg-accent/15 text-foreground"
+                      : stageAllowed("single-player", progress, masteredAllSubtypes)
+                        ? "border-border bg-surface-2 text-foreground hover:bg-surface-3"
+                        : "cursor-not-allowed border-border/40 bg-surface-2/40 text-muted"
+                  }`}
+                >
+                  <span className="block text-muted">Single-player</span>
+                  <span className="block font-medium">{progress.singlePlayerMastered ? "Mastered" : "In progress"}</span>
+                </button>
+              </form>
+              <form method="get" action="/tutor">
+                <input type="hidden" name="stage" value="multiplayer" />
+                <button
+                  type="submit"
+                  disabled={!stageAllowed("multiplayer", progress, masteredAllSubtypes)}
+                  className={`w-full rounded-lg border px-3 py-2 text-left transition-colors ${
+                    activeStage === "multiplayer"
+                      ? "border-accent bg-accent/15 text-foreground"
+                      : stageAllowed("multiplayer", progress, masteredAllSubtypes)
+                        ? "border-border bg-surface-2 text-foreground hover:bg-surface-3"
+                        : "cursor-not-allowed border-border/40 bg-surface-2/40 text-muted"
+                  }`}
+                >
+                  <span className="block text-muted">Multiplayer</span>
+                  <span className="block font-medium">Up to {progress.maxMultiplayerUnlocked} players</span>
+                </button>
+              </form>
+              <form method="get" action="/tutor">
+                <input type="hidden" name="stage" value="speed" />
+                <button
+                  type="submit"
+                  disabled={!stageAllowed("speed", progress, masteredAllSubtypes)}
+                  className={`w-full rounded-lg border px-3 py-2 text-left transition-colors ${
+                    activeStage === "speed"
+                      ? "border-accent bg-accent/15 text-foreground"
+                      : stageAllowed("speed", progress, masteredAllSubtypes)
+                        ? "border-border bg-surface-2 text-foreground hover:bg-surface-3"
+                        : "cursor-not-allowed border-border/40 bg-surface-2/40 text-muted"
+                  }`}
+                >
+                  <span className="block text-muted">Speed challenge</span>
+                  <span className="block font-medium">{progress.speedChallengeUnlocked ? "Unlocked" : "Locked"}</span>
+                </button>
+              </form>
             </div>
           </Card>
 

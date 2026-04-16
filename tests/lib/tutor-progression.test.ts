@@ -3,6 +3,7 @@ import {
   allSubtypesMastered,
   applySkipCheckResult,
   evaluateSubtypeMastery,
+  isSubtypeUnlocked,
   recomputeUnlockState,
   type SubtypeAttempt,
 } from "@/lib/tutor/progression";
@@ -44,6 +45,22 @@ describe("evaluateSubtypeMastery", () => {
 });
 
 describe("unlock model", () => {
+  it("keeps total scoring and winner locked until the first five are mastered", () => {
+    expect(isSubtypeUnlocked("total_scoring", INITIAL_PROGRESS_STATE.subtypeMastery)).toBe(false);
+    expect(isSubtypeUnlocked("winner_tiebreakers", INITIAL_PROGRESS_STATE.subtypeMastery)).toBe(false);
+
+    const firstFiveMastered = {
+      popularity_tiers: true,
+      stars_scoring: true,
+      territories_scoring: true,
+      resources_scoring: true,
+      structure_bonus_scoring: true,
+    };
+
+    expect(isSubtypeUnlocked("total_scoring", firstFiveMastered)).toBe(true);
+    expect(isSubtypeUnlocked("winner_tiebreakers", firstFiveMastered)).toBe(true);
+  });
+
   it("does not complete tutorial without all gates", () => {
     const progress = recomputeUnlockState({
       ...INITIAL_PROGRESS_STATE,

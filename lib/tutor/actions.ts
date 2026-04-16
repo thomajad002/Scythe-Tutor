@@ -17,6 +17,7 @@ import {
   allSubtypesMastered,
   applySkipCheckResult,
   evaluateSubtypeMastery,
+  isSubtypeUnlocked,
   recomputeUnlockState,
   type SubtypeAttempt,
   type SubtypeId,
@@ -82,6 +83,45 @@ function sendSuccessWithStage(
   }
 
   redirect(`${TUTOR_PATH}?${params.toString()}`);
+}
+
+function chooseAdaptiveHintLevel(
+  correctCount: number,
+  incorrectCount: number,
+  constraintViolationCount: number,
+): LayeredHintLevel {
+  const difficultySignal = Math.max(0, incorrectCount - correctCount) + constraintViolationCount;
+
+  if (difficultySignal >= 4) {
+    return 3;
+  }
+
+  if (difficultySignal >= 2) {
+    return 2;
+  }
+
+  return 1;
+}
+
+async function getSubtypeAttemptCounts(userId: string, subtypeId: SubtypeId): Promise<{ correct: number; incorrect: number }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("subtype_attempt_events")
+    .select("is_correct")
+    .eq("user_id", userId)
+    .eq("subtype_id", subtypeId)
+    .order("created_at", { ascending: false })
+    .limit(10);
+
+  if (error) {
+    sendError(error.message);
+  }
+
+  const correct = (data ?? []).filter((row) => row.is_correct).length;
+  return {
+    correct,
+    incorrect: (data ?? []).length - correct,
+  };
 }
 
 function getSubtypeHint(subtypeId: SubtypeId, level: LayeredHintLevel): string {
@@ -158,19 +198,6 @@ async function recomputeSubtypeProgressForUser(userId: string, subtypeId: Subtyp
 
   await persistProgress(userId, next);
   return { next, mastered };
-}
-
-function parseHintLevel(value: FormDataEntryValue | null): LayeredHintLevel {
-  const parsed = toInt(value, 1);
-  if (parsed === 2) {
-    return 2;
-  }
-
-  if (parsed === 3) {
-    return 3;
-  }
-
-  return 1;
 }
 
 function toOptionalInt(value: FormDataEntryValue | null): number | undefined {
@@ -334,10 +361,14 @@ export async function submitSubtypeTutorAttempt(formData: FormData) {
   const supabase = await createClient();
   const subtypeId = toSubtypeId(formData.get("subtype_id"));
   const scenarioId = String(formData.get("scenario_id") ?? "");
-  const hintLevel = parseHintLevel(formData.get("hint_level"));
 
   if (!subtypeId) {
     sendError("Choose a valid subtype.");
+  }
+
+  const current = await getTutorProgressState(user.id);
+  if (!isSubtypeUnlocked(subtypeId, current.subtypeMastery)) {
+    sendError("That subtype is locked until the first five are mastered.");
   }
 
   const requiredPlayerCount = subtypeId === "winner_tiebreakers" ? 2 : 1;
@@ -348,6 +379,10 @@ export async function submitSubtypeTutorAttempt(formData: FormData) {
 
   let isCorrect = false;
   let summary = "";
+  let constraintViolationCount = 0;
+  let adaptiveHints: string[] = [];
+
+  const priorAttemptCounts = await getSubtypeAttemptCounts(user.id, subtypeId);
 
   if (subtypeId === "winner_tiebreakers") {
     const submittedWinnerId = String(formData.get("winner_id") ?? "");
@@ -364,6 +399,11 @@ export async function submitSubtypeTutorAttempt(formData: FormData) {
       const expectedTier = getPopularityTier(player.popularity);
       isCorrect = submittedTier === expectedTier;
       summary = `Expected tier: ${expectedTier} (popularity ${player.popularity})`;
+
+      if (!isCorrect) {
+        const adaptiveLevel = chooseAdaptiveHintLevel(priorAttemptCounts.correct, priorAttemptCounts.incorrect + 1, 1);
+        adaptiveHints = [getSubtypeHint(subtypeId, adaptiveLevel)];
+      }
     } else {
       const submittedValue = toOptionalInt(submittedRaw);
       const expectedBySubtype: Record<Exclude<SubtypeId, "popularity_tiers" | "winner_tiebreakers">, number> = {
@@ -377,10 +417,38 @@ export async function submitSubtypeTutorAttempt(formData: FormData) {
       const expectedValue = expectedBySubtype[subtypeId as Exclude<SubtypeId, "popularity_tiers" | "winner_tiebreakers">];
       isCorrect = submittedValue === expectedValue;
       summary = `Expected value: ${expectedValue}`;
+
+      const fieldBySubtype: Record<Exclude<SubtypeId, "popularity_tiers" | "winner_tiebreakers">, keyof BreakdownAttempt> = {
+        stars_scoring: "stars",
+        territories_scoring: "territories",
+        resources_scoring: "resources",
+        structure_bonus_scoring: "structureBonus",
+        total_scoring: "total",
+      };
+      const activeField = fieldBySubtype[subtypeId as Exclude<SubtypeId, "popularity_tiers" | "winner_tiebreakers">];
+
+      const cbmEvaluation = evaluateFullBreakdownAttempt(player, {
+        [activeField]: submittedValue,
+      });
+
+      const violations = cbmEvaluation.errors.filter((error) => error.field === activeField);
+      constraintViolationCount = violations.length;
+
+      if (!isCorrect) {
+        const adaptiveLevel = chooseAdaptiveHintLevel(
+          priorAttemptCounts.correct,
+          priorAttemptCounts.incorrect + 1,
+          Math.max(1, constraintViolationCount),
+        );
+        adaptiveHints = [
+          getSubtypeHint(subtypeId, adaptiveLevel),
+          ...getLayeredHints(violations, adaptiveLevel),
+        ];
+      }
     }
   }
 
-  const firstTryCorrect = isCorrect && hintLevel === 1;
+  const firstTryCorrect = isCorrect;
   const { error: insertError } = await supabase.from("subtype_attempt_events").insert({
     user_id: user.id,
     subtype_id: subtypeId,
@@ -402,26 +470,21 @@ export async function submitSubtypeTutorAttempt(formData: FormData) {
       "subtype",
       summary,
       undefined,
-      { subtype: subtypeId },
+      { subtype: subtypeId, result: "correct" },
     );
   }
 
-  const hints = [getSubtypeHint(subtypeId, hintLevel)];
-  if (subtypeId !== "winner_tiebreakers" && subtypeId !== "popularity_tiers") {
-    const player = scenario.players[0];
-    const fullEval = evaluateFullBreakdownAttempt(player, {
-      stars: toOptionalInt(formData.get("value")),
-    });
-    const layered = getLayeredHints(fullEval.errors, hintLevel);
-    hints.push(...layered.slice(0, 1));
+  if (adaptiveHints.length === 0) {
+    const fallbackLevel = chooseAdaptiveHintLevel(priorAttemptCounts.correct, priorAttemptCounts.incorrect + 1, Math.max(1, constraintViolationCount));
+    adaptiveHints = [getSubtypeHint(subtypeId, fallbackLevel)];
   }
 
   sendSuccessWithStage(
     `Incorrect for ${subtypeId.replaceAll("_", " ")}. Keep going.`,
     "subtype",
     summary + ` | First-try streak: ${next.subtypeMastery[subtypeId] ? "mastered" : "building"}`,
-    hints,
-    { subtype: subtypeId },
+    adaptiveHints,
+    { subtype: subtypeId, result: "incorrect" },
   );
 }
 
@@ -516,7 +579,6 @@ export async function recordMultiplayerAttempt(formData: FormData) {
 export async function submitSinglePlayerScoringAttempt(formData: FormData) {
   const user = await requireUser();
   const scenarioId = String(formData.get("scenario_id") ?? "");
-  const hintLevel = parseHintLevel(formData.get("hint_level"));
 
   const scenario = await getTemporaryScenarioById(scenarioId);
   if (!scenario || scenario.playerCount < 1) {
@@ -566,15 +628,23 @@ export async function submitSinglePlayerScoringAttempt(formData: FormData) {
       `Correct. Single-player streak is now ${next.singlePlayerConsecutiveCorrect}.`,
       "single-player",
       summary,
+      undefined,
+      { result: "correct" },
     );
   }
 
-  const hints = getLayeredHints(evaluation.errors, hintLevel);
+  const adaptiveHintLevel = chooseAdaptiveHintLevel(
+    current.singlePlayerConsecutiveCorrect,
+    1,
+    evaluation.errors.length,
+  );
+  const hints = getLayeredHints(evaluation.errors, adaptiveHintLevel);
   sendSuccessWithStage(
     "Attempt evaluated. Review hints and decomposition, then try again.",
     "single-player",
     summary,
     hints,
+    { result: "incorrect" },
   );
 }
 

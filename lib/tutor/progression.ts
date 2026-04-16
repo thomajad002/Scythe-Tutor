@@ -10,6 +10,8 @@ export const SUBTYPE_IDS = [
 
 export type SubtypeId = (typeof SUBTYPE_IDS)[number];
 
+const PRIMARY_SUBTYPE_COUNT = 5;
+
 export type SubtypeAttempt = {
   subtypeId: SubtypeId;
   isCorrect: boolean;
@@ -38,6 +40,15 @@ export const INITIAL_PROGRESS_STATE: TutorProgressState = {
 
 export function allSubtypesMastered(subtypeMastery: Partial<Record<SubtypeId, boolean>>): boolean {
   return SUBTYPE_IDS.every((subtypeId) => subtypeMastery[subtypeId] === true);
+}
+
+export function arePrimarySubtypesMastered(subtypeMastery: Partial<Record<SubtypeId, boolean>>): boolean {
+  return SUBTYPE_IDS.slice(0, PRIMARY_SUBTYPE_COUNT).every((subtypeId) => subtypeMastery[subtypeId] === true);
+}
+
+export function isSubtypeUnlocked(subtypeId: SubtypeId, subtypeMastery: Partial<Record<SubtypeId, boolean>>): boolean {
+  const subtypeIndex = SUBTYPE_IDS.indexOf(subtypeId);
+  return subtypeIndex < PRIMARY_SUBTYPE_COUNT || arePrimarySubtypesMastered(subtypeMastery);
 }
 
 export function evaluateSubtypeMastery(attemptsNewestFirst: SubtypeAttempt[]): boolean {
