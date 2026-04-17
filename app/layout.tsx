@@ -4,6 +4,7 @@ import "./globals.css";
 import { AppHeader } from "@/components/app-header";
 import { getOptionalUser } from "@/lib/auth/server";
 import { headerNavConfig } from "@/lib/navigation";
+import { Analytics } from "@vercel/analytics/next";
 
 const plexSans = IBM_Plex_Sans({
   variable: "--font-plex-sans",
@@ -55,6 +56,7 @@ export default async function RootLayout({
             {children}
           </div>
         </div>
+        <Analytics />
       </body>
     </html>
   );
