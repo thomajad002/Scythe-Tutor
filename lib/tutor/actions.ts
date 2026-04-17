@@ -518,7 +518,6 @@ export async function submitSubtypeTutorAttempt(formData: FormData) {
   sendSuccessWithStage(
     `Incorrect for ${subtypeId.replaceAll("_", " ")}. Keep going.`,
     "subtype",
-    undefined,
     adaptiveHints,
     { subtype: subtypeId, result: "incorrect", scenario: scenario.id },
   );
@@ -669,7 +668,6 @@ export async function submitSinglePlayerScoringAttempt(formData: FormData) {
   sendSuccessWithStage(
     "Attempt evaluated. Review hints and decomposition, then try again.",
     "single-player",
-    undefined,
     hints,
     { result: "incorrect", scenario: scenario.id },
   );
@@ -754,7 +752,6 @@ export async function submitMultiplayerScoringAttempt(formData: FormData) {
   sendSuccessWithStage(
     "Multiplayer attempt evaluated. Review your breakdown and hints, then try again.",
     "multiplayer",
-    undefined,
     hints,
     { scenario: scenario.id, players: String(playerCount), result: "incorrect" },
   );
