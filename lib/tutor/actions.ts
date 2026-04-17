@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/server";
 import {
@@ -38,6 +37,14 @@ import { createClient } from "@/lib/supabase/server";
 
 const TUTOR_PATH = "/tutor";
 
+function isDemoAccount(email: string | null | undefined): boolean {
+  if (!email) {
+    return false;
+  }
+
+  return email.toLowerCase().startsWith("demo@");
+}
+
 function toBoolean(value: FormDataEntryValue | null): boolean {
   return String(value ?? "").toLowerCase() === "true";
 }
@@ -57,7 +64,6 @@ function sendError(message: string): never {
 }
 
 function sendSuccess(message: string): never {
-  revalidatePath(TUTOR_PATH);
   redirect(`${TUTOR_PATH}?success=${encodeURIComponent(message)}`);
 }
 
@@ -68,8 +74,6 @@ function sendSuccessWithStage(
   hints?: string[],
   extraParams?: Record<string, string>,
 ): never {
-  revalidatePath(TUTOR_PATH);
-
   const params = new URLSearchParams({
     success: message,
     stage,
@@ -136,44 +140,6 @@ async function getSubtypeAttemptHistory(userId: string, subtypeId: SubtypeId): P
     isCorrect: row.is_correct,
     firstTryCorrect: row.first_try_correct,
   }));
-}
-
-async function recomputeSubtypeProgressForUser(userId: string, subtypeId: SubtypeId) {
-  const supabase = await createClient();
-  const { data: attemptsData, error: attemptsError } = await supabase
-    .from("subtype_attempt_events")
-    .select("subtype_id, is_correct, first_try_correct")
-    .eq("user_id", userId)
-    .eq("subtype_id", subtypeId)
-    .order("created_at", { ascending: false })
-    .limit(5);
-
-  if (attemptsError) {
-    sendError(attemptsError.message);
-  }
-
-  const attempts: SubtypeAttempt[] = (attemptsData ?? []).map((row) => ({
-    subtypeId: row.subtype_id as SubtypeId,
-    isCorrect: row.is_correct,
-    firstTryCorrect: row.first_try_correct,
-  }));
-
-  let mastered = evaluateSubtypeMastery(attempts);
-  if (subtypeId === "territories_scoring") {
-    const coverage = await getTerritoriesFactoryCoverage(userId);
-    mastered = coverage.correctWithFactory && coverage.correctWithoutFactory;
-  }
-  const current = await getTutorProgressState(userId);
-  const next = recomputeUnlockState({
-    ...current,
-    subtypeMastery: {
-      ...current.subtypeMastery,
-      [subtypeId]: mastered || current.subtypeMastery[subtypeId] === true,
-    },
-  });
-
-  await persistProgress(userId, next);
-  return { next, mastered };
 }
 
 function toOptionalInt(value: FormDataEntryValue | null): number | undefined {
@@ -378,21 +344,23 @@ export async function submitSubtypeTutorAttempt(formData: FormData) {
   const supabase = await createClient();
   const subtypeId = toSubtypeId(formData.get("subtype_id"));
   const scenarioId = String(formData.get("scenario_id") ?? "");
+  const demoAccount = isDemoAccount(user.email);
 
   if (!subtypeId) {
     sendError("Choose a valid subtype.");
   }
 
-  const current = await getTutorProgressState(user.id);
+  const [current, priorAttempts] = await Promise.all([
+    getTutorProgressState(user.id),
+    getSubtypeAttemptHistory(user.id, subtypeId),
+  ]);
+
   if (!demoAccount && !isSubtypeUnlocked(subtypeId, current.subtypeMastery)) {
     sendError("That subtype is locked until the first five are mastered.");
   }
 
-  const winnerAttempts = subtypeId === "winner_tiebreakers"
-    ? await getSubtypeAttemptHistory(user.id, "winner_tiebreakers")
-    : [];
   const requiredPlayerCount = subtypeId === "winner_tiebreakers"
-    ? getAdaptiveWinnerTiebreakerPlayerCount(winnerAttempts)
+    ? getAdaptiveWinnerTiebreakerPlayerCount(priorAttempts)
     : 1;
   const territoriesFactoryMode = subtypeId === "territories_scoring"
     ? await chooseTerritoriesFactoryMode(user.id)
@@ -409,8 +377,6 @@ export async function submitSubtypeTutorAttempt(formData: FormData) {
   let isCorrect = false;
   let summary = "";
   let adaptiveHints: string[] = [];
-
-  const priorAttempts = await getSubtypeAttemptHistory(user.id, subtypeId);
   const adaptiveLevel = chooseAdaptiveHintLevel(priorAttempts);
 
   if (subtypeId === "winner_tiebreakers") {
@@ -534,7 +500,34 @@ export async function submitSubtypeTutorAttempt(formData: FormData) {
     sendError(insertError.message);
   }
 
-  const { next, mastered } = await recomputeSubtypeProgressForUser(user.id, subtypeId);
+  const updatedAttempts: SubtypeAttempt[] = [
+    {
+      subtypeId,
+      isCorrect,
+      firstTryCorrect,
+    },
+    ...priorAttempts.slice(0, 4).map((attempt) => ({
+      subtypeId,
+      isCorrect: attempt.isCorrect,
+      firstTryCorrect: attempt.firstTryCorrect,
+    })),
+  ];
+  let mastered = evaluateSubtypeMastery(updatedAttempts);
+
+  if (subtypeId === "territories_scoring") {
+    const coverage = await getTerritoriesFactoryCoverage(user.id);
+    mastered = coverage.correctWithFactory && coverage.correctWithoutFactory;
+  }
+
+  const next = recomputeUnlockState({
+    ...current,
+    subtypeMastery: {
+      ...current.subtypeMastery,
+      [subtypeId]: mastered || current.subtypeMastery[subtypeId] === true,
+    },
+  });
+
+  await persistProgress(user.id, next);
 
   if (isCorrect) {
     sendSuccessWithStage(
@@ -809,53 +802,5 @@ export async function submitMultiplayerScoringAttempt(formData: FormData) {
     summary,
     hints,
     { scenario: scenario.id, players: String(playerCount), result: "incorrect" },
-  );
-}
-
-export async function refreshTemporarySinglePlayerScenario() {
-  const user = await requireUser();
-  const scenario = await getTemporaryScenarioForPlayerCount(`${user.id}-${Date.now()}`, 1);
-
-  revalidatePath(TUTOR_PATH);
-  redirect(`${TUTOR_PATH}?stage=single-player&scenario=${encodeURIComponent(scenario.id)}`);
-}
-
-export async function refreshTemporarySubtypeScenario(formData: FormData) {
-  const user = await requireUser();
-  const subtypeId = toSubtypeId(formData.get("subtype_id"));
-  if (!subtypeId) {
-    sendError("Choose a valid subtype.");
-  }
-
-  const winnerAttempts = subtypeId === "winner_tiebreakers"
-    ? await getSubtypeAttemptHistory(user.id, "winner_tiebreakers")
-    : [];
-  const playerCount = subtypeId === "winner_tiebreakers"
-    ? getAdaptiveWinnerTiebreakerPlayerCount(winnerAttempts)
-    : 1;
-  const territoriesFactoryMode = subtypeId === "territories_scoring"
-    ? await chooseTerritoriesFactoryMode(user.id)
-    : "any";
-  const scenario = await getTemporaryScenarioForPlayerCount(
-    `${user.id}-${Date.now()}`,
-    playerCount,
-    subtypeId,
-    { territoriesFactoryMode },
-  );
-
-  revalidatePath(TUTOR_PATH);
-  redirect(
-    `${TUTOR_PATH}?stage=subtype&subtype=${encodeURIComponent(subtypeId)}&scenario=${encodeURIComponent(scenario.id)}&players=${encodeURIComponent(String(playerCount))}`,
-  );
-}
-
-export async function refreshTemporaryMultiplayerScenario(formData: FormData) {
-  const user = await requireUser();
-  const playerCount = toInt(formData.get("player_count"), 2);
-  const scenario = await getTemporaryScenarioForPlayerCount(`${user.id}-${Date.now()}`, playerCount);
-
-  revalidatePath(TUTOR_PATH);
-  redirect(
-    `${TUTOR_PATH}?stage=multiplayer&scenario=${encodeURIComponent(scenario.id)}&players=${encodeURIComponent(String(playerCount))}`,
   );
 }

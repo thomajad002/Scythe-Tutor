@@ -1,17 +1,14 @@
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { FormSubmitButton } from "@/components/ui/form-submit-button";
 import { BoardMap } from "@/components/tutor/board-map";
 import { CoinPile } from "@/components/tutor/coin-pile";
 import { FactionLabel, formatFactionLabel } from "@/components/tutor/faction-label";
 import { MultiplayerScoringForm } from "@/components/tutor/multiplayer-scoring-form";
 import { TotalScoringForm } from "@/components/tutor/total-scoring-form";
 import { requireUser } from "@/lib/auth/server";
-import { loadScytheBoardData } from "@/lib/scythe/board-data";
-import { getPopularityTier, scoreFullScenario, scoreMultiplayerRound } from "@/lib/scythe/scoring";
+import { loadScytheBoardData, type ScytheBoardData } from "@/lib/scythe/board-data";
 import {
-  refreshTemporaryMultiplayerScenario,
-  refreshTemporarySinglePlayerScenario,
-  refreshTemporarySubtypeScenario,
   submitSubtypeTutorAttempt,
   submitMultiplayerScoringAttempt,
   submitSinglePlayerScoringAttempt,
@@ -22,6 +19,7 @@ import {
   getTemporaryScenarioById,
   getTemporaryScenarioForPlayerCount,
   type PiecePlacement,
+  type TemporaryScenario,
 } from "@/lib/tutor/scenario-bank";
 
 const SUBTYPE_LABELS: Record<(typeof SUBTYPE_IDS)[number], string> = {
@@ -356,60 +354,18 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
   const multiplayerUnlocked = progress.skipCheckPassed || progress.singlePlayerMastered;
   const multiplayerMastered = progress.maxMultiplayerUnlocked >= 5;
   const selectedMultiplayerCount = 5;
+  const activeSubtypeMastered = progress.subtypeMastery[activeSubtype] === true;
+  const moveOnSubtype = SUBTYPE_IDS.find((subtypeId) => !progress.subtypeMastery[subtypeId] && subtypeId !== activeSubtype)
+    ?? nextSubtype;
+  const subtypeFeedbackTone = resultMessage === "correct"
+    ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
+    : resultMessage === "incorrect"
+      ? "border-rose-500/40 bg-rose-500/10 text-rose-200"
+      : "border-emerald-500/40 bg-emerald-500/10 text-emerald-200";
+  const requestedScenarioPromise = requestedScenarioId
+    ? getTemporaryScenarioById(requestedScenarioId)
+    : Promise.resolve(null);
 
-  const winnerAttempts = activeSubtype === "winner_tiebreakers"
-    ? await getSubtypeAttemptHistory(user.id, "winner_tiebreakers", 10)
-    : [];
-  const subtypePlayerCount = activeSubtype === "winner_tiebreakers"
-    ? getAdaptiveWinnerTiebreakerPlayerCount(winnerAttempts)
-    : 1;
-  const territoriesFactoryMode = activeSubtype === "territories_scoring"
-    ? chooseTerritoriesFactoryMode(await getTerritoriesFactoryCoverage(user.id))
-    : "any";
-  const fallbackSubtypeScenario = await getTemporaryScenarioForPlayerCount(
-    user.id,
-    subtypePlayerCount,
-    activeSubtype,
-    { territoriesFactoryMode },
-  );
-  const subtypeScenarioCandidate = requestedScenarioId
-    ? await getTemporaryScenarioById(requestedScenarioId)
-    : null;
-  const subtypeScenario = subtypeScenarioCandidate
-    && subtypeScenarioCandidate.playerCount === subtypePlayerCount
-    && (activeSubtype !== "winner_tiebreakers" || subtypeScenarioCandidate.scenarioKind === "tie-training")
-    ? subtypeScenarioCandidate
-    : fallbackSubtypeScenario;
-
-  const fallbackSingleScenario = await getTemporaryScenarioForPlayerCount(user.id, 5);
-  const singleScenarioCandidate = requestedScenarioId
-    ? await getTemporaryScenarioById(requestedScenarioId)
-    : null;
-  const singleScenario = singleScenarioCandidate && singleScenarioCandidate.playerCount === 5
-    ? singleScenarioCandidate
-    : fallbackSingleScenario;
-
-  const fallbackMultiplayerScenario = await getTemporaryScenarioForPlayerCount(user.id, selectedMultiplayerCount);
-  const multiplayerScenarioCandidate = requestedScenarioId
-    ? await getTemporaryScenarioById(requestedScenarioId)
-    : null;
-  const multiplayerScenario = multiplayerScenarioCandidate && multiplayerScenarioCandidate.playerCount === selectedMultiplayerCount
-    ? multiplayerScenarioCandidate
-    : fallbackMultiplayerScenario;
-
-  const coinPlayers =
-    activeStage === "multiplayer"
-      ? multiplayerScenario.players
-      : activeStage === "subtype"
-        ? subtypeScenario.players
-        : singleScenario.players;
-
-  const activeCoinScenarioId =
-    activeStage === "multiplayer"
-      ? multiplayerScenario.id
-      : activeStage === "subtype"
-        ? subtypeScenario.id
-        : singleScenario.id;
   const subtypeRailItems = SUBTYPE_IDS.map((subtypeId) => {
     const mastered = progress.subtypeMastery[subtypeId] === true;
     const locked = !isSubtypeUnlocked(subtypeId, progress.subtypeMastery);
@@ -432,56 +388,79 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
   const coreItemsAfterStructure = resourcesCoreIndex >= 0
     ? coreSubtypeRailItems.slice(resourcesCoreIndex + 1)
     : [];
-  const subtypeBoardPlacements = filterSubtypePlacements(
-    activeSubtype,
-    subtypeScenario.piecePlacements,
-    subtypeScenario.players[0]?.playerId ?? "p1",
-  );
-  const activeSubtypeMastered = progress.subtypeMastery[activeSubtype] === true;
-  const moveOnSubtype = SUBTYPE_IDS.find((subtypeId) => !progress.subtypeMastery[subtypeId] && subtypeId !== activeSubtype)
-    ?? nextSubtype;
-  const subtypeFeedbackTone = resultMessage === "correct"
-    ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
-    : resultMessage === "incorrect"
-      ? "border-rose-500/40 bg-rose-500/10 text-rose-200"
-      : "border-emerald-500/40 bg-emerald-500/10 text-emerald-200";
-  const boardData = await loadScytheBoardData();
-  const enableHexDetails = activeStage !== "subtype" || HEX_DETAIL_SUBTYPE_IDS.has(activeSubtype);
-  const subtypeDemoBreakdown = scoreFullScenario(subtypeScenario.players[0]);
-  const subtypeDemoAnswer = (() => {
-    switch (activeSubtype) {
-      case "popularity_tiers":
-        return `Answer: ${getPopularityTier(subtypeScenario.players[0].popularity)}`;
-      case "stars_scoring":
-        return `Answer: ${subtypeDemoBreakdown.points.stars}`;
-      case "territories_scoring":
-        return `Answer: ${subtypeDemoBreakdown.points.territories}`;
-      case "resources_scoring":
-        return `Answer: ${subtypeDemoBreakdown.points.resources}`;
-      case "structure_bonus_farm_or_tundra":
-      case "structure_bonus_tunnel_with_structures":
-      case "structure_bonus_longest_structure_row":
-      case "structure_bonus_tunnel_adjacent":
-      case "structure_bonus_encounter_adjacent":
-      case "structure_bonus_lake_adjacent":
-        return `Answer: ${subtypeDemoBreakdown.points.structureBonus}`;
-      case "total_scoring":
-        return `Answer: ${subtypeDemoBreakdown.points.total}`;
-      case "winner_tiebreakers": {
-        const round = scoreMultiplayerRound(subtypeScenario.players);
-        const winnerDisplayName = subtypeScenario.winnerFaction
-          ? subtypeScenario.players.find((player) => player.faction === subtypeScenario.winnerFaction)?.displayName
-          : subtypeScenario.players.find((player) => player.playerId === round.winnerPlayerId)?.displayName;
-        const reason = subtypeScenario.winnerRule ?? round.tiebreakReason;
+  let boardData: ScytheBoardData | null = null;
+  let subtypeScenario: TemporaryScenario | null = null;
+  let singleScenario: TemporaryScenario | null = null;
+  let multiplayerScenario: TemporaryScenario | null = null;
+  let subtypeBoardPlacements: PiecePlacement[] = [];
+  let enableHexDetails = false;
 
-        return `Answer: ${winnerDisplayName ?? round.winnerPlayerId.toUpperCase()} | ${String(reason).replaceAll("_", " ")}`;
-      }
-      default:
-        return `Answer: ${subtypeDemoBreakdown.points.total}`;
-    }
-  })();
-  const singlePlayerBreakdown = scoreFullScenario(singleScenario.players[0]);
-  const singlePlayerDemoAnswer = `Answer: stars ${singlePlayerBreakdown.points.stars} | territories ${singlePlayerBreakdown.points.territories} | resources ${singlePlayerBreakdown.points.resources} | coins ${singlePlayerBreakdown.points.coins} | structure bonus ${singlePlayerBreakdown.points.structureBonus} | total ${singlePlayerBreakdown.points.total}`;
+  if (activeStage === "subtype") {
+    const [requestedScenario, winnerAttempts, territoriesCoverage, loadedBoardData] = await Promise.all([
+      requestedScenarioPromise,
+      activeSubtype === "winner_tiebreakers"
+        ? getSubtypeAttemptHistory(user.id, "winner_tiebreakers", 10)
+        : Promise.resolve([]),
+      activeSubtype === "territories_scoring"
+        ? getTerritoriesFactoryCoverage(user.id)
+        : Promise.resolve(null),
+      loadScytheBoardData(),
+    ]);
+
+    const subtypePlayerCount = activeSubtype === "winner_tiebreakers"
+      ? getAdaptiveWinnerTiebreakerPlayerCount(winnerAttempts)
+      : 1;
+    const territoriesFactoryMode = activeSubtype === "territories_scoring" && territoriesCoverage
+      ? chooseTerritoriesFactoryMode(territoriesCoverage)
+      : "any";
+    const fallbackSubtypeScenario = await getTemporaryScenarioForPlayerCount(
+      user.id,
+      subtypePlayerCount,
+      activeSubtype,
+      { territoriesFactoryMode },
+    );
+
+    subtypeScenario = requestedScenario
+      && requestedScenario.playerCount === subtypePlayerCount
+      && (activeSubtype !== "winner_tiebreakers" || requestedScenario.scenarioKind === "tie-training")
+      ? requestedScenario
+      : fallbackSubtypeScenario;
+    boardData = loadedBoardData;
+    enableHexDetails = HEX_DETAIL_SUBTYPE_IDS.has(activeSubtype);
+    subtypeBoardPlacements = filterSubtypePlacements(
+      activeSubtype,
+      subtypeScenario.piecePlacements,
+      subtypeScenario.players[0]?.playerId ?? "p1",
+    );
+  }
+
+  if (activeStage === "single-player") {
+    const [requestedScenario, fallbackSingleScenario, loadedBoardData] = await Promise.all([
+      requestedScenarioPromise,
+      getTemporaryScenarioForPlayerCount(user.id, 5),
+      loadScytheBoardData(),
+    ]);
+
+    singleScenario = requestedScenario && requestedScenario.playerCount === 5
+      ? requestedScenario
+      : fallbackSingleScenario;
+    boardData = loadedBoardData;
+    enableHexDetails = true;
+  }
+
+  if (activeStage === "multiplayer") {
+    const [requestedScenario, fallbackMultiplayerScenario, loadedBoardData] = await Promise.all([
+      requestedScenarioPromise,
+      getTemporaryScenarioForPlayerCount(user.id, selectedMultiplayerCount),
+      loadScytheBoardData(),
+    ]);
+
+    multiplayerScenario = requestedScenario && requestedScenario.playerCount === selectedMultiplayerCount
+      ? requestedScenario
+      : fallbackMultiplayerScenario;
+    boardData = loadedBoardData;
+    enableHexDetails = true;
+  }
 
   return (
     <main className="mx-auto min-h-full w-full max-w-6xl px-4 py-4 sm:px-6 sm:py-5">
@@ -492,7 +471,7 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
 
           </div>
 
-          {activeStage === "subtype" ? (
+          {activeStage === "subtype" && subtypeScenario && boardData ? (
             <div className="space-y-4">
               <div className="space-y-2">
                 <h2 className="text-2xl">Walkthrough: Subtype Mastery</h2>
@@ -527,7 +506,6 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                   action={submitSubtypeTutorAttempt}
                   scenarioId={subtypeScenario.id}
                   subtypeId={activeSubtype}
-                  demoAnswer={subtypeDemoAnswer}
                 />
               ) : (
                 <form action={submitSubtypeTutorAttempt} className="space-y-3">
@@ -586,17 +564,11 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                     </label>
                   ) : null}
 
-                  <div className="flex flex-wrap gap-2">
-                    {resultMessage === "correct" ? (
-                      <Button type="submit" formAction={refreshTemporarySubtypeScenario} formNoValidate>
-                        Next question
-                      </Button>
-                    ) : (
-                      <>
-                        <Button type="submit">Submit Answer</Button>
-                      </>
-                    )}
-                  </div>
+                  {resultMessage === "correct" ? null : (
+                    <div className="flex flex-wrap gap-2">
+                      <FormSubmitButton pendingLabel="Checking answer...">Submit Answer</FormSubmitButton>
+                    </div>
+                  )}
                 </form>
               )}
 
@@ -610,21 +582,31 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                   {errorMessage}
                 </p>
               ) : null}
-              {summaryMessage && activeStage !== "subtype" ? (
+              {summaryMessage ? (
                 <p className="rounded-xl border border-sky-500/40 bg-sky-500/10 p-3 text-sm text-sky-200">
                   {summaryMessage}
                 </p>
               ) : null}
               <HintList message={hintsMessage} />
 
+              {resultMessage === "correct" ? (
+                <form method="get" action="/tutor">
+                  <input type="hidden" name="stage" value="subtype" />
+                  <input type="hidden" name="subtype" value={activeSubtype} />
+                  <Button type="submit">Next question</Button>
+                </form>
+              ) : null}
+
               {activeSubtypeMastered ? (
                 masteredAllSubtypes ? (
-                  <form action={refreshTemporarySinglePlayerScenario}>
+                  <form method="get" action="/tutor">
+                    <input type="hidden" name="stage" value="single-player" />
                     <Button type="submit" variant="secondary">Move on to next section</Button>
                   </form>
                 ) : (
-                  <form action={refreshTemporarySubtypeScenario}>
-                    <input type="hidden" name="subtype_id" value={moveOnSubtype} />
+                  <form method="get" action="/tutor">
+                    <input type="hidden" name="stage" value="subtype" />
+                    <input type="hidden" name="subtype" value={moveOnSubtype} />
                     <Button type="submit" variant="secondary">Move on to next section</Button>
                   </form>
                 )
@@ -632,7 +614,7 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
             </div>
           ) : null}
 
-          {activeStage === "single-player" ? (
+          {activeStage === "single-player" && singleScenario && boardData ? (
             <div className="space-y-4">
               <h2 className="text-2xl">Walkthrough: Single-Player Gate</h2>
               {singlePlayerUnlocked ? (
@@ -664,7 +646,7 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                     <label className="text-sm text-muted">Structure bonus points<input className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-foreground" type="number" name="structure_bonus" required /></label>
                     <label className="text-sm text-muted">Total<input className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-foreground" type="number" name="total" required /></label>
                     <div className="flex flex-wrap gap-2 sm:col-span-2 lg:col-span-3">
-                      <Button type="submit">Submit Answer</Button>
+                      <FormSubmitButton pendingLabel="Checking answer...">Submit Answer</FormSubmitButton>
                     </div>
                   </form>
 
@@ -685,7 +667,8 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                   ) : null}
                   <HintList message={hintsMessage} />
 
-                  <form action={refreshTemporarySinglePlayerScenario}>
+                  <form method="get" action="/tutor">
+                    <input type="hidden" name="stage" value="single-player" />
                     <Button type="submit" variant="secondary">Next question</Button>
                   </form>
                 </div>
@@ -695,7 +678,7 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
             </div>
           ) : null}
 
-          {activeStage === "multiplayer" ? (
+          {activeStage === "multiplayer" && multiplayerScenario && boardData ? (
             <div className="space-y-4">
               <h2 className="text-2xl">Walkthrough: Multiplayer Gate</h2>
               {multiplayerUnlocked ? (
@@ -727,8 +710,8 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                     }))}
                   />
 
-                  <form action={refreshTemporaryMultiplayerScenario}>
-                    <input type="hidden" name="player_count" value={String(selectedMultiplayerCount)} />
+                  <form method="get" action="/tutor">
+                    <input type="hidden" name="stage" value="multiplayer" />
                     <Button type="submit" variant="secondary">Next question</Button>
                   </form>
                 </div>
@@ -926,11 +909,22 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
             </div>
           </Card>
 
-          {activeStage === "single-player" || activeStage === "multiplayer" ? (
+          {activeStage === "single-player" && singleScenario ? (
             <CoinPile
-              scenarioId={activeCoinScenarioId}
-              focusPlayerId={activeStage === "single-player" ? coinPlayers[0]?.playerId : undefined}
-              players={coinPlayers.map((player) => ({
+              scenarioId={singleScenario.id}
+              focusPlayerId={singleScenario.players[0]?.playerId}
+              players={singleScenario.players.map((player) => ({
+                playerId: player.playerId,
+                displayName: player.displayName,
+                coins: player.coins,
+              }))}
+            />
+          ) : null}
+
+          {activeStage === "multiplayer" && multiplayerScenario ? (
+            <CoinPile
+              scenarioId={multiplayerScenario.id}
+              players={multiplayerScenario.players.map((player) => ({
                 playerId: player.playerId,
                 displayName: player.displayName,
                 coins: player.coins,

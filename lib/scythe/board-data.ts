@@ -1,6 +1,5 @@
 import { cache } from "react";
-import { promises as fs } from "node:fs";
-import path from "node:path";
+import boardData from "@/data/boards/scythe_board.json";
 
 export type BoardHex = {
   id: number;
@@ -85,11 +84,8 @@ export type ScytheBoardData = {
   };
 };
 
-const BOARD_JSON_PATH = path.join(process.cwd(), "data", "boards", "scythe_board.json");
-
 export const loadScytheBoardData = cache(async (): Promise<ScytheBoardData> => {
-  const raw = await fs.readFile(BOARD_JSON_PATH, "utf8");
-  const parsed = JSON.parse(raw) as ScytheBoardData;
+  const parsed = boardData as ScytheBoardData;
 
   if (parsed.gameType !== "scythe") {
     throw new Error("Unexpected board type in scythe_board.json");

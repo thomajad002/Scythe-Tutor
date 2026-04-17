@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { FactionLabel } from "@/components/tutor/faction-label";
-import { Button } from "@/components/ui/button";
+import { FormSubmitButton } from "@/components/ui/form-submit-button";
 import { Input } from "@/components/ui/input";
 
 type MultiplayerBreakdownField = "stars" | "territories" | "resources" | "coins" | "structureBonus";
@@ -127,7 +127,9 @@ export function MultiplayerScoringForm({ scenarioId, playerCount, players, actio
         </select>
       </label>
 
-      <Button type="submit" className="mt-2">Submit Multiplayer Round</Button>
+      <FormSubmitButton pendingLabel="Checking round..." type="submit" className="mt-2">
+        Submit Multiplayer Round
+      </FormSubmitButton>
     </form>
   );
 }

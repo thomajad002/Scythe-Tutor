@@ -132,6 +132,7 @@ export function CoinPile({ scenarioId, players, hidePlayerTotals = false, focusP
                         }.webp`}
                         alt={`${denomination} coin`}
                         className="mx-auto h-9 w-9 object-contain"
+                        decoding="async"
                         style={{ width: "46px", height: "46px" }}
                       />
                       <p className="text-[10px] text-muted">x{count}</p>
@@ -147,6 +148,7 @@ export function CoinPile({ scenarioId, players, hidePlayerTotals = false, focusP
                     src={token.imagePath}
                     alt={`${token.denomination} coin ${token.face}`}
                     className="h-9 w-9 -rotate-2 object-contain"
+                    decoding="async"
                     style={{
                       width: "46px",
                       height: "46px",
