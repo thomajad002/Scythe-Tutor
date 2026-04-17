@@ -600,13 +600,9 @@ export async function recordMultiplayerAttempt(formData: FormData) {
     sendError("Multiplayer stage is locked until single-player is mastered.");
   }
 
-  if (!demoAccount && playerCount > current.maxMultiplayerUnlocked) {
-    sendError("That player count is still locked.");
-  }
-
   let nextUnlocked = current.maxMultiplayerUnlocked;
-  if (isCorrect && playerCount === current.maxMultiplayerUnlocked && current.maxMultiplayerUnlocked < 5) {
-    nextUnlocked = current.maxMultiplayerUnlocked + 1;
+  if (isCorrect) {
+    nextUnlocked = Math.max(current.maxMultiplayerUnlocked, Math.min(5, playerCount));
   }
 
   const next = recomputeUnlockState({

@@ -33,7 +33,7 @@ function getRecommendedStep(progress: Awaited<ReturnType<typeof getTutorProgress
   if (progress.maxMultiplayerUnlocked < 5) {
     return {
       title: "Push Multiplayer Mastery",
-      description: "Advance multiplayer target sizes up to 5 players to unlock speed challenge.",
+      description: "Keep practicing full 5-player rounds until multiplayer is mastered and speed challenge unlocks.",
       ctaLabel: "Open Multiplayer Stage",
       ctaHref: "/tutor?stage=multiplayer",
     };
@@ -56,6 +56,7 @@ export default async function DashboardPage() {
   const masteredAllSubtypes = allSubtypesMastered(progress.subtypeMastery);
   const singlePlayerUnlocked = progress.skipCheckPassed || masteredAllSubtypes;
   const multiplayerUnlocked = progress.skipCheckPassed || progress.singlePlayerMastered;
+  const multiplayerMastered = progress.maxMultiplayerUnlocked >= 5;
   const recommendedStep = getRecommendedStep(progress);
 
   const { data: profile } = await supabase
@@ -133,8 +134,8 @@ export default async function DashboardPage() {
                 </div>
                 <div className="rounded-lg border border-border bg-surface p-3">
                   <p className="text-xs uppercase tracking-[0.08em] text-muted">Multiplayer Gate</p>
-                  <p className="mt-1 text-sm text-foreground">{multiplayerUnlocked ? "Unlocked" : "Locked"}</p>
-                  <p className="mt-1 text-xs text-muted">Current unlock: up to {Math.max(2, progress.maxMultiplayerUnlocked)} players</p>
+                  <p className="mt-1 text-sm text-foreground">{multiplayerUnlocked ? (multiplayerMastered ? "Mastered" : "In progress") : "Locked"}</p>
+                  <p className="mt-1 text-xs text-muted">Mode: full 5-player scoring rounds</p>
                 </div>
               </div>
 

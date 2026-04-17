@@ -4,6 +4,7 @@ import { BoardMap } from "@/components/tutor/board-map";
 import { CoinPile } from "@/components/tutor/coin-pile";
 import { DemoAnswerButton } from "@/components/tutor/demo-answer-button";
 import { FactionLabel, formatFactionLabel } from "@/components/tutor/faction-label";
+import { MultiplayerScoringForm } from "@/components/tutor/multiplayer-scoring-form";
 import { TotalScoringForm } from "@/components/tutor/total-scoring-form";
 import { isDemoAccount } from "@/lib/auth/demo";
 import { requireUser } from "@/lib/auth/server";
@@ -113,11 +114,6 @@ function readParam(value: string | string[] | undefined): string | null {
   }
 
   return Array.isArray(value) ? value[0] ?? null : value;
-}
-
-function readIntParam(value: string | string[] | undefined): number | null {
-  const parsed = Number.parseInt(readParam(value) ?? "", 10);
-  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function parseHintsMessage(message: string | null): string[] {
@@ -346,7 +342,6 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
   const requestedStage = parseStage(readParam(params.stage));
   const requestedSubtypeId = parseSubtypeId(readParam(params.subtype));
   const requestedScenarioId = readParam(params.scenario);
-  const requestedPlayers = readIntParam(params.players);
 
   const progress = await getTutorProgressState(user.id);
   const demoAccount = isDemoAccount(user.email);
@@ -363,10 +358,8 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
     : nextSubtype;
   const singlePlayerUnlocked = demoAccount || progress.skipCheckPassed || masteredAllSubtypes;
   const multiplayerUnlocked = demoAccount || progress.skipCheckPassed || progress.singlePlayerMastered;
-  const activeMultiplayerTarget = Math.max(2, Math.min(5, progress.maxMultiplayerUnlocked));
-  const selectedMultiplayerCount = requestedPlayers && requestedPlayers >= 2 && requestedPlayers <= 5
-    ? requestedPlayers
-    : activeMultiplayerTarget;
+  const multiplayerMastered = progress.maxMultiplayerUnlocked >= 5;
+  const selectedMultiplayerCount = 5;
 
   const winnerAttempts = activeSubtype === "winner_tiebreakers"
     ? await getSubtypeAttemptHistory(user.id, "winner_tiebreakers", 10)
@@ -525,7 +518,6 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                 <CoinPile
                   hidePlayerTotals={activeSubtype === "total_scoring"}
                   scenarioId={subtypeScenario.id}
-                  focusPlayerId={subtypeScenario.players[0]?.playerId}
                   players={subtypeScenario.players.map((player) => ({
                     playerId: player.playerId,
                     displayName: player.displayName,
@@ -712,10 +704,8 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
           {activeStage === "multiplayer" ? (
             <div className="space-y-4">
               <h2 className="text-2xl">Walkthrough: Multiplayer Gate</h2>
-              <p className="text-sm text-muted">Current stage focuses on <span className="text-foreground">{selectedMultiplayerCount} players</span>.</p>
               {multiplayerUnlocked ? (
                 <div className="space-y-3">
-                  <p className="text-sm text-muted">Scenario <span className="text-foreground">{multiplayerScenario.id}</span></p>
                   <BoardMap
                     boardImagePath={multiplayerScenario.boardImagePath}
                     boardImageWidth={multiplayerScenario.boardImageWidth}
@@ -728,30 +718,20 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                     className="w-full"
                   />
 
-                  <form action={submitMultiplayerScoringAttempt} className="space-y-3">
-                    <input type="hidden" name="scenario_id" value={multiplayerScenario.id} />
-                    <input type="hidden" name="player_count" value={String(selectedMultiplayerCount)} />
-
-                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                      {multiplayerScenario.players.map((player) => (
-                        <label key={player.playerId} className="text-sm text-muted">
-                          <FactionLabel value={player.displayName} className="text-sm" /> total (Stars {player.stars}, Territories {player.territories}, Resources {player.resources}, Coins {player.coins}, Pop {player.popularity})
-                          <input className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-foreground" type="number" name={`total_${player.playerId}`} required />
-                        </label>
-                      ))}
-                    </div>
-
-                    <label className="text-sm text-muted">
-                      Winner
-                      <select name="winner_id" className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-foreground">
-                        {multiplayerScenario.players.map((player) => (
-                          <option key={player.playerId} value={player.playerId}>{formatFactionLabel(player.displayName)}</option>
-                        ))}
-                      </select>
-                    </label>
-
-                    <Button type="submit">Submit Multiplayer Round</Button>
-                  </form>
+                  <MultiplayerScoringForm
+                    action={submitMultiplayerScoringAttempt}
+                    scenarioId={multiplayerScenario.id}
+                    playerCount={selectedMultiplayerCount}
+                    players={multiplayerScenario.players.map((player) => ({
+                      playerId: player.playerId,
+                      displayName: formatFactionLabel(player.displayName),
+                      stars: player.stars,
+                      territories: player.territories,
+                      resources: player.resources,
+                      coins: player.coins,
+                      popularity: player.popularity,
+                    }))}
+                  />
 
                   <form action={refreshTemporaryMultiplayerScenario}>
                     <input type="hidden" name="player_count" value={String(selectedMultiplayerCount)} />
@@ -927,7 +907,9 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                   }`}
                 >
                   <span className="block text-muted">Multiplayer</span>
-                  <span className="block font-medium">Up to {progress.maxMultiplayerUnlocked} players</span>
+                  <span className="block font-medium">
+                    {multiplayerUnlocked ? (multiplayerMastered ? "Mastered" : "In progress") : "Locked"}
+                  </span>
                 </button>
               </form>
               <form method="get" action="/tutor">
@@ -953,7 +935,7 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
           {activeStage === "single-player" || activeStage === "multiplayer" ? (
             <CoinPile
               scenarioId={activeCoinScenarioId}
-              focusPlayerId={coinPlayers[0]?.playerId}
+              focusPlayerId={activeStage === "single-player" ? coinPlayers[0]?.playerId : undefined}
               players={coinPlayers.map((player) => ({
                 playerId: player.playerId,
                 displayName: player.displayName,
