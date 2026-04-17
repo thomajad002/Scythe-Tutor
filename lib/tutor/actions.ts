@@ -12,6 +12,7 @@ import {
   scoreFullScenario,
   scoreMultiplayerRound,
   type BreakdownAttempt,
+  type MultiplayerRoundResult,
 } from "@/lib/scythe/scoring";
 import {
   chooseAdaptiveHintLevel,
@@ -212,12 +213,21 @@ function formatWinnerTiebreakReason(reason: string): string {
   }
 }
 
-function normalizeWinnerRule(rule: string): string {
+function normalizeWinnerRule(rule?: string): MultiplayerRoundResult["tiebreakReason"] | undefined {
   switch (rule) {
     case "piecesAndStructures":
+    case "unitsAndStructures":
       return "unitsAndStructures";
-    default:
+    case "score":
+    case "power":
+    case "popularity":
+    case "resources":
+    case "territories":
+    case "stars":
+    case "shared":
       return rule;
+    default:
+      return undefined;
   }
 }
 
@@ -411,7 +421,7 @@ export async function submitSubtypeTutorAttempt(formData: FormData) {
     const scenarioWinnerId = scenario.winnerFaction
       ? scenario.players.find((player) => player.faction === scenario.winnerFaction)?.playerId ?? null
       : null;
-    const scenarioWinnerReason = scenario.winnerRule ? normalizeWinnerRule(scenario.winnerRule) : null;
+    const scenarioWinnerReason = normalizeWinnerRule(scenario.winnerRule);
     const round = scenarioWinnerId && scenarioWinnerReason
       ? null
       : scoreMultiplayerRound(scenario.players);
@@ -464,12 +474,15 @@ export async function submitSubtypeTutorAttempt(formData: FormData) {
       };
       const evaluation = evaluateFullBreakdownAttempt(player, attempt);
       isCorrect = evaluation.isFullyCorrect;
+      const expectedStructureBonus = "structureBonus" in evaluation.expected
+        ? evaluation.expected.structureBonus
+        : 0;
       summary = [
         `Expected stars: ${evaluation.expected.stars}`,
         `territories: ${evaluation.expected.territories}`,
         `resources: ${evaluation.expected.resources}`,
         `coins: ${evaluation.expected.coins}`,
-        `structure bonus: ${evaluation.expected.structureBonus}`,
+        `structure bonus: ${expectedStructureBonus}`,
         `total: ${evaluation.expected.total}`,
       ].join(" | ");
 
