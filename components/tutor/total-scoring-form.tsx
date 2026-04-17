@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { DemoAnswerButton } from "@/components/tutor/demo-answer-button";
 
 type BreakdownField = "stars" | "territories" | "resources" | "coins" | "structureBonus";
 
@@ -82,7 +81,6 @@ export function TotalScoringForm({ scenarioId, subtypeId, action, demoAnswer }: 
 
       <div className="flex flex-wrap gap-2">
         <Button type="submit">Submit Answer</Button>
-        <DemoAnswerButton answer={demoAnswer} />
       </div>
     </form>
   );

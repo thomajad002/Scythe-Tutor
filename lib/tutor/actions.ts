@@ -2,7 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { isDemoAccount } from "@/lib/auth/demo";
 import { requireUser } from "@/lib/auth/server";
 import {
   evaluateFullBreakdownAttempt,
@@ -377,7 +376,6 @@ export async function recordSubtypePractice(formData: FormData) {
 export async function submitSubtypeTutorAttempt(formData: FormData) {
   const user = await requireUser();
   const supabase = await createClient();
-  const demoAccount = isDemoAccount(user.email);
   const subtypeId = toSubtypeId(formData.get("subtype_id"));
   const scenarioId = String(formData.get("scenario_id") ?? "");
 

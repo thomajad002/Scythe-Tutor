@@ -2,11 +2,9 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { BoardMap } from "@/components/tutor/board-map";
 import { CoinPile } from "@/components/tutor/coin-pile";
-import { DemoAnswerButton } from "@/components/tutor/demo-answer-button";
 import { FactionLabel, formatFactionLabel } from "@/components/tutor/faction-label";
 import { MultiplayerScoringForm } from "@/components/tutor/multiplayer-scoring-form";
 import { TotalScoringForm } from "@/components/tutor/total-scoring-form";
-import { isDemoAccount } from "@/lib/auth/demo";
 import { requireUser } from "@/lib/auth/server";
 import { loadScytheBoardData } from "@/lib/scythe/board-data";
 import { getPopularityTier, scoreFullScenario, scoreMultiplayerRound } from "@/lib/scythe/scoring";
@@ -174,17 +172,16 @@ function stageAllowed(
   stage: StageId,
   progress: Awaited<ReturnType<typeof getTutorProgressState>>,
   masteredAllSubtypes: boolean,
-  demoAccount: boolean,
 ): boolean {
   switch (stage) {
     case "subtype":
       return true;
     case "single-player":
-      return demoAccount || progress.skipCheckPassed || masteredAllSubtypes;
+      return progress.skipCheckPassed || masteredAllSubtypes;
     case "multiplayer":
-      return demoAccount || progress.skipCheckPassed || progress.singlePlayerMastered;
+      return progress.skipCheckPassed || progress.singlePlayerMastered;
     case "speed":
-      return demoAccount || progress.speedChallengeUnlocked;
+      return progress.speedChallengeUnlocked;
     default:
       return false;
   }
@@ -344,20 +341,19 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
   const requestedScenarioId = readParam(params.scenario);
 
   const progress = await getTutorProgressState(user.id);
-  const demoAccount = isDemoAccount(user.email);
   const masteredAllSubtypes = allSubtypesMastered(progress.subtypeMastery);
   const defaultStage = getDefaultStage(progress, masteredAllSubtypes);
-  const activeStage = requestedStage && stageAllowed(requestedStage, progress, masteredAllSubtypes, demoAccount)
+  const activeStage = requestedStage && stageAllowed(requestedStage, progress, masteredAllSubtypes)
     ? requestedStage
     : defaultStage;
 
   const masteredCount = SUBTYPE_IDS.filter((subtypeId) => progress.subtypeMastery[subtypeId]).length;
   const nextSubtype = SUBTYPE_IDS.find((subtypeId) => !progress.subtypeMastery[subtypeId]) ?? SUBTYPE_IDS[0];
-  const activeSubtype = requestedSubtypeId && (demoAccount || isSubtypeUnlocked(requestedSubtypeId, progress.subtypeMastery))
+  const activeSubtype = requestedSubtypeId && isSubtypeUnlocked(requestedSubtypeId, progress.subtypeMastery)
     ? requestedSubtypeId
     : nextSubtype;
-  const singlePlayerUnlocked = demoAccount || progress.skipCheckPassed || masteredAllSubtypes;
-  const multiplayerUnlocked = demoAccount || progress.skipCheckPassed || progress.singlePlayerMastered;
+  const singlePlayerUnlocked = progress.skipCheckPassed || masteredAllSubtypes;
+  const multiplayerUnlocked = progress.skipCheckPassed || progress.singlePlayerMastered;
   const multiplayerMastered = progress.maxMultiplayerUnlocked >= 5;
   const selectedMultiplayerCount = 5;
 
@@ -598,7 +594,6 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                     ) : (
                       <>
                         <Button type="submit">Submit Answer</Button>
-                        <DemoAnswerButton answer={subtypeDemoAnswer} />
                       </>
                     )}
                   </div>
@@ -670,7 +665,6 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                     <label className="text-sm text-muted">Total<input className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-foreground" type="number" name="total" required /></label>
                     <div className="flex flex-wrap gap-2 sm:col-span-2 lg:col-span-3">
                       <Button type="submit">Submit Answer</Button>
-                      <DemoAnswerButton answer={singlePlayerDemoAnswer} />
                     </div>
                   </form>
 
@@ -787,7 +781,7 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                       <input type="hidden" name="subtype" value={item.subtypeId} />
                       <button
                         type="submit"
-                        disabled={item.locked && !demoAccount}
+                        disabled={item.locked}
                         className={`w-full rounded-2xl border px-3 py-3 text-left transition-colors ${
                           item.active
                             ? "border-accent bg-accent/15 text-foreground"
@@ -829,7 +823,7 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                           <input type="hidden" name="subtype" value={item.subtypeId} />
                           <button
                             type="submit"
-                            disabled={item.locked && !demoAccount}
+                            disabled={item.locked}
                             className={`w-full rounded-2xl border px-3 py-3 text-left transition-colors ${
                               item.active
                                 ? "border-accent bg-accent/15 text-foreground"
@@ -856,7 +850,7 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                       <input type="hidden" name="subtype" value={item.subtypeId} />
                       <button
                         type="submit"
-                        disabled={item.locked && !demoAccount}
+                        disabled={item.locked}
                         className={`w-full rounded-2xl border px-3 py-3 text-left transition-colors ${
                           item.active
                             ? "border-accent bg-accent/15 text-foreground"
@@ -880,11 +874,11 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                 <input type="hidden" name="stage" value="single-player" />
                 <button
                   type="submit"
-                  disabled={!stageAllowed("single-player", progress, masteredAllSubtypes, demoAccount)}
+                  disabled={!stageAllowed("single-player", progress, masteredAllSubtypes)}
                   className={`w-full rounded-lg border px-3 py-2 text-left transition-colors ${
                     activeStage === "single-player"
                       ? "border-accent bg-accent/15 text-foreground"
-                      : stageAllowed("single-player", progress, masteredAllSubtypes, demoAccount)
+                      : stageAllowed("single-player", progress, masteredAllSubtypes)
                         ? "border-border bg-surface-2 text-foreground hover:bg-surface-3"
                         : "cursor-not-allowed border-border/40 bg-surface-2/40 text-muted"
                   }`}
@@ -897,11 +891,11 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                 <input type="hidden" name="stage" value="multiplayer" />
                 <button
                   type="submit"
-                  disabled={!stageAllowed("multiplayer", progress, masteredAllSubtypes, demoAccount)}
+                  disabled={!stageAllowed("multiplayer", progress, masteredAllSubtypes)}
                   className={`w-full rounded-lg border px-3 py-2 text-left transition-colors ${
                     activeStage === "multiplayer"
                       ? "border-accent bg-accent/15 text-foreground"
-                      : stageAllowed("multiplayer", progress, masteredAllSubtypes, demoAccount)
+                      : stageAllowed("multiplayer", progress, masteredAllSubtypes)
                         ? "border-border bg-surface-2 text-foreground hover:bg-surface-3"
                         : "cursor-not-allowed border-border/40 bg-surface-2/40 text-muted"
                   }`}
@@ -916,11 +910,11 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                 <input type="hidden" name="stage" value="speed" />
                 <button
                   type="submit"
-                  disabled={!stageAllowed("speed", progress, masteredAllSubtypes, demoAccount)}
+                  disabled={!stageAllowed("speed", progress, masteredAllSubtypes)}
                   className={`w-full rounded-lg border px-3 py-2 text-left transition-colors ${
                     activeStage === "speed"
                       ? "border-accent bg-accent/15 text-foreground"
-                      : stageAllowed("speed", progress, masteredAllSubtypes, demoAccount)
+                      : stageAllowed("speed", progress, masteredAllSubtypes)
                         ? "border-border bg-surface-2 text-foreground hover:bg-surface-3"
                         : "cursor-not-allowed border-border/40 bg-surface-2/40 text-muted"
                   }`}
