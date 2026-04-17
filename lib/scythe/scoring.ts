@@ -574,7 +574,7 @@ const HINT_TEXT: Record<ScoringErrorCode, Record<LayeredHintLevel, string>> = {
     1: "Re-check which popularity tier applies to this scenario.",
     2: "Find the tier first, then use its category multiplier for stars/territories/resources.",
     3: "Tier multipliers are low 3/2/1, mid 4/3/2, high 5/4/3 for stars/territories/resources.",
-    4: "Use the tier shown in the summary and recompute the category from the raw count.",
+    4: "Find the right tier from the raw popularity count, then recompute the category.",
   },
   miscounted_resources: {
     1: "Resources score in pairs, not singles.",
@@ -586,19 +586,19 @@ const HINT_TEXT: Record<ScoringErrorCode, Record<LayeredHintLevel, string>> = {
     1: "Double-check your total arithmetic.",
     2: "Add stars + territories + resources + coins (+ structure bonus) exactly once.",
     3: "Re-sum from left to right and verify each component before final total.",
-    4: "The total should match the category sum in the summary after you recompute every part.",
+    4: "The total should match the category sum after you recompute every part.",
   },
   omitted_category: {
     1: "One category is missing.",
     2: "Submit values for stars, territories, resources, coins, structure bonus, and total.",
     3: "Use a checklist: stars -> territories -> resources -> coins -> structure bonus -> total.",
-    4: "Fill every category before resubmitting; the summary shows the expected values.",
+    4: "Fill every category before resubmitting, then verify the full total.",
   },
   incorrect_component: {
     1: "One component is off. Recompute that category.",
     2: "Verify raw count, then multiplier/rule, then final component value.",
     3: "Recompute the category from the raw count and the matching rule.",
-    4: "Use the summary to identify the specific category that needs to be recomputed.",
+    4: "Check each category from raw count to final value to find the mismatch.",
   },
 };
 

@@ -331,7 +331,6 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
   const params = searchParams ? await searchParams : {};
   const successMessage = readParam(params.success);
   const errorMessage = readParam(params.error);
-  const summaryMessage = readParam(params.summary);
   const hintsMessage = readParam(params.hints);
   const resultMessage = readParam(params.result);
   const requestedStage = parseStage(readParam(params.stage));
@@ -582,11 +581,6 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                   {errorMessage}
                 </p>
               ) : null}
-              {summaryMessage ? (
-                <p className="rounded-xl border border-sky-500/40 bg-sky-500/10 p-3 text-sm text-sky-200">
-                  {summaryMessage}
-                </p>
-              ) : null}
               <HintList message={hintsMessage} />
 
               {resultMessage === "correct" ? (
@@ -658,11 +652,6 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                   {errorMessage ? (
                     <p className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-200">
                       {errorMessage}
-                    </p>
-                  ) : null}
-                  {summaryMessage ? (
-                    <p className="rounded-xl border border-sky-500/40 bg-sky-500/10 p-3 text-sm text-sky-200">
-                      {summaryMessage}
                     </p>
                   ) : null}
                   <HintList message={hintsMessage} />

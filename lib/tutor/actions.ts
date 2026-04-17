@@ -70,7 +70,6 @@ function sendSuccess(message: string): never {
 function sendSuccessWithStage(
   message: string,
   stage: "subtype" | "single-player" | "multiplayer",
-  summary?: string,
   hints?: string[],
   extraParams?: Record<string, string>,
 ): never {
@@ -78,10 +77,6 @@ function sendSuccessWithStage(
     success: message,
     stage,
   });
-
-  if (summary) {
-    params.set("summary", summary);
-  }
 
   if (hints && hints.length > 0) {
     params.set("hints", hints.join(" | "));
@@ -375,7 +370,6 @@ export async function submitSubtypeTutorAttempt(formData: FormData) {
     });
 
   let isCorrect = false;
-  let summary = "";
   let adaptiveHints: string[] = [];
   const adaptiveLevel = chooseAdaptiveHintLevel(priorAttempts);
 
@@ -392,10 +386,6 @@ export async function submitSubtypeTutorAttempt(formData: FormData) {
     const winnerCorrect = submittedWinnerId === (scenarioWinnerId ?? round?.winnerPlayerId ?? "");
     const reasonCorrect = submittedReasonId === (scenarioWinnerReason ?? round?.tiebreakReason ?? "");
     isCorrect = winnerCorrect && reasonCorrect;
-    summary = scenarioWinnerId && scenarioWinnerReason
-      ? `Expected winner: ${scenarioWinnerId.toUpperCase()} | Expected reason: ${formatWinnerTiebreakReason(scenarioWinnerReason)}`
-      : `Expected winner: ${round!.winnerPlayerId.toUpperCase()} | Expected reason: ${formatWinnerTiebreakReason(round!.tiebreakReason)}`;
-
     if (!isCorrect) {
       adaptiveHints = [
         getSubtypeHints(subtypeId, adaptiveLevel, {
@@ -416,8 +406,6 @@ export async function submitSubtypeTutorAttempt(formData: FormData) {
       const submittedTier = String(submittedRaw ?? "").toLowerCase();
       const expectedTier = getPopularityTier(player.popularity);
       isCorrect = submittedTier === expectedTier;
-      summary = `Expected tier: ${expectedTier} (popularity ${player.popularity})`;
-
       if (!isCorrect) {
         adaptiveHints = [
           getSubtypeHints(subtypeId, adaptiveLevel, {
@@ -438,18 +426,6 @@ export async function submitSubtypeTutorAttempt(formData: FormData) {
       };
       const evaluation = evaluateFullBreakdownAttempt(player, attempt);
       isCorrect = evaluation.isFullyCorrect;
-      const expectedStructureBonus = "structureBonus" in evaluation.expected
-        ? evaluation.expected.structureBonus
-        : 0;
-      summary = [
-        `Expected stars: ${evaluation.expected.stars}`,
-        `territories: ${evaluation.expected.territories}`,
-        `resources: ${evaluation.expected.resources}`,
-        `coins: ${evaluation.expected.coins}`,
-        `structure bonus: ${expectedStructureBonus}`,
-        `total: ${evaluation.expected.total}`,
-      ].join(" | ");
-
       if (!isCorrect) {
         adaptiveHints = getBreakdownAttemptHints(evaluation.errors, adaptiveLevel, {
           scenario: player,
@@ -473,7 +449,6 @@ export async function submitSubtypeTutorAttempt(formData: FormData) {
 
       const expectedValue = expectedBySubtype[subtypeId as Exclude<SubtypeId, "popularity_tiers" | "winner_tiebreakers">];
       isCorrect = submittedValue === expectedValue;
-      summary = `Expected value: ${expectedValue}`;
 
       if (!isCorrect) {
         adaptiveHints = [
@@ -535,7 +510,6 @@ export async function submitSubtypeTutorAttempt(formData: FormData) {
         ? `Correct. ${subtypeId.replaceAll("_", " ")} is now mastered.`
         : `Correct. ${subtypeId.replaceAll("_", " ")} progress updated.`,
       "subtype",
-      summary,
       undefined,
       { subtype: subtypeId, result: "correct", scenario: scenario.id },
     );
@@ -544,7 +518,7 @@ export async function submitSubtypeTutorAttempt(formData: FormData) {
   sendSuccessWithStage(
     `Incorrect for ${subtypeId.replaceAll("_", " ")}. Keep going.`,
     "subtype",
-    summary + ` | First-try streak: ${next.subtypeMastery[subtypeId] ? "mastered" : "building"}`,
+    undefined,
     adaptiveHints,
     { subtype: subtypeId, result: "incorrect", scenario: scenario.id },
   );
@@ -675,20 +649,10 @@ export async function submitSinglePlayerScoringAttempt(formData: FormData) {
 
   await persistProgress(user.id, next);
 
-  const summary = [
-    `Expected stars: ${evaluation.expected.stars}`,
-    `territories: ${evaluation.expected.territories}`,
-    `resources: ${evaluation.expected.resources}`,
-    `coins: ${evaluation.expected.coins}`,
-    `structure bonus: ${(evaluation.expected as { structureBonus?: number }).structureBonus ?? 0}`,
-    `total: ${evaluation.expected.total}`,
-  ].join(" | ");
-
   if (isCorrect) {
     sendSuccessWithStage(
       `Correct. Single-player streak is now ${next.singlePlayerConsecutiveCorrect}.`,
       "single-player",
-      summary,
       undefined,
       { result: "correct", scenario: scenario.id },
     );
@@ -705,7 +669,7 @@ export async function submitSinglePlayerScoringAttempt(formData: FormData) {
   sendSuccessWithStage(
     "Attempt evaluated. Review hints and decomposition, then try again.",
     "single-player",
-    summary,
+    undefined,
     hints,
     { result: "incorrect", scenario: scenario.id },
   );
@@ -763,18 +727,10 @@ export async function submitMultiplayerScoringAttempt(formData: FormData) {
 
   await persistProgress(user.id, next);
 
-  const summaryRows = expectedRound.perPlayer.map((player) => `${player.playerId.toUpperCase()}: ${player.total}`);
-  const summary = [
-    `Expected totals -> ${summaryRows.join(", ")}`,
-    `Expected winner -> ${expectedRound.winnerPlayerId.toUpperCase()}`,
-    `Tiebreak reason -> ${expectedRound.tiebreakReason}`,
-  ].join(" | ");
-
   if (isCorrect && nextUnlocked > current.maxMultiplayerUnlocked) {
     sendSuccessWithStage(
       `Correct round. ${nextUnlocked}-player scenarios unlocked.`,
       "multiplayer",
-      summary,
       undefined,
       { scenario: scenario.id, players: String(playerCount), result: "correct" },
     );
@@ -784,7 +740,6 @@ export async function submitMultiplayerScoringAttempt(formData: FormData) {
     sendSuccessWithStage(
       "Correct round. Multiplayer attempt saved.",
       "multiplayer",
-      summary,
       undefined,
       { scenario: scenario.id, players: String(playerCount), result: "correct" },
     );
@@ -797,9 +752,9 @@ export async function submitMultiplayerScoringAttempt(formData: FormData) {
   ];
 
   sendSuccessWithStage(
-    "Multiplayer attempt evaluated. Review expected totals and tiebreak details.",
+    "Multiplayer attempt evaluated. Review your breakdown and hints, then try again.",
     "multiplayer",
-    summary,
+    undefined,
     hints,
     { scenario: scenario.id, players: String(playerCount), result: "incorrect" },
   );
