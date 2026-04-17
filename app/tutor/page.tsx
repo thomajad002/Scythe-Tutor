@@ -2,10 +2,13 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { BoardMap } from "@/components/tutor/board-map";
 import { CoinPile } from "@/components/tutor/coin-pile";
+import { DemoAnswerButton } from "@/components/tutor/demo-answer-button";
 import { FactionLabel, formatFactionLabel } from "@/components/tutor/faction-label";
 import { TotalScoringForm } from "@/components/tutor/total-scoring-form";
+import { isDemoAccount } from "@/lib/auth/demo";
 import { requireUser } from "@/lib/auth/server";
 import { loadScytheBoardData } from "@/lib/scythe/board-data";
+import { getPopularityTier, scoreFullScenario, scoreMultiplayerRound } from "@/lib/scythe/scoring";
 import {
   refreshTemporaryMultiplayerScenario,
   refreshTemporarySinglePlayerScenario,
@@ -175,16 +178,17 @@ function stageAllowed(
   stage: StageId,
   progress: Awaited<ReturnType<typeof getTutorProgressState>>,
   masteredAllSubtypes: boolean,
+  demoAccount: boolean,
 ): boolean {
   switch (stage) {
     case "subtype":
       return true;
     case "single-player":
-      return progress.skipCheckPassed || masteredAllSubtypes;
+      return demoAccount || progress.skipCheckPassed || masteredAllSubtypes;
     case "multiplayer":
-      return progress.skipCheckPassed || progress.singlePlayerMastered;
+      return demoAccount || progress.skipCheckPassed || progress.singlePlayerMastered;
     case "speed":
-      return progress.speedChallengeUnlocked;
+      return demoAccount || progress.speedChallengeUnlocked;
     default:
       return false;
   }
@@ -345,19 +349,20 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
   const requestedPlayers = readIntParam(params.players);
 
   const progress = await getTutorProgressState(user.id);
+  const demoAccount = isDemoAccount(user.email);
   const masteredAllSubtypes = allSubtypesMastered(progress.subtypeMastery);
   const defaultStage = getDefaultStage(progress, masteredAllSubtypes);
-  const activeStage = requestedStage && stageAllowed(requestedStage, progress, masteredAllSubtypes)
+  const activeStage = requestedStage && stageAllowed(requestedStage, progress, masteredAllSubtypes, demoAccount)
     ? requestedStage
     : defaultStage;
 
   const masteredCount = SUBTYPE_IDS.filter((subtypeId) => progress.subtypeMastery[subtypeId]).length;
   const nextSubtype = SUBTYPE_IDS.find((subtypeId) => !progress.subtypeMastery[subtypeId]) ?? SUBTYPE_IDS[0];
-  const activeSubtype = requestedSubtypeId && isSubtypeUnlocked(requestedSubtypeId, progress.subtypeMastery)
+  const activeSubtype = requestedSubtypeId && (demoAccount || isSubtypeUnlocked(requestedSubtypeId, progress.subtypeMastery))
     ? requestedSubtypeId
     : nextSubtype;
-  const singlePlayerUnlocked = progress.skipCheckPassed || masteredAllSubtypes;
-  const multiplayerUnlocked = progress.skipCheckPassed || progress.singlePlayerMastered;
+  const singlePlayerUnlocked = demoAccount || progress.skipCheckPassed || masteredAllSubtypes;
+  const multiplayerUnlocked = demoAccount || progress.skipCheckPassed || progress.singlePlayerMastered;
   const activeMultiplayerTarget = Math.max(2, Math.min(5, progress.maxMultiplayerUnlocked));
   const selectedMultiplayerCount = requestedPlayers && requestedPlayers >= 2 && requestedPlayers <= 5
     ? requestedPlayers
@@ -453,6 +458,41 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
       : "border-emerald-500/40 bg-emerald-500/10 text-emerald-200";
   const boardData = await loadScytheBoardData();
   const enableHexDetails = activeStage !== "subtype" || HEX_DETAIL_SUBTYPE_IDS.has(activeSubtype);
+  const subtypeDemoBreakdown = scoreFullScenario(subtypeScenario.players[0]);
+  const subtypeDemoAnswer = (() => {
+    switch (activeSubtype) {
+      case "popularity_tiers":
+        return `Answer: ${getPopularityTier(subtypeScenario.players[0].popularity)}`;
+      case "stars_scoring":
+        return `Answer: ${subtypeDemoBreakdown.points.stars}`;
+      case "territories_scoring":
+        return `Answer: ${subtypeDemoBreakdown.points.territories}`;
+      case "resources_scoring":
+        return `Answer: ${subtypeDemoBreakdown.points.resources}`;
+      case "structure_bonus_farm_or_tundra":
+      case "structure_bonus_tunnel_with_structures":
+      case "structure_bonus_longest_structure_row":
+      case "structure_bonus_tunnel_adjacent":
+      case "structure_bonus_encounter_adjacent":
+      case "structure_bonus_lake_adjacent":
+        return `Answer: ${subtypeDemoBreakdown.points.structureBonus}`;
+      case "total_scoring":
+        return `Answer: ${subtypeDemoBreakdown.points.total}`;
+      case "winner_tiebreakers": {
+        const round = scoreMultiplayerRound(subtypeScenario.players);
+        const winnerDisplayName = subtypeScenario.winnerFaction
+          ? subtypeScenario.players.find((player) => player.faction === subtypeScenario.winnerFaction)?.displayName
+          : subtypeScenario.players.find((player) => player.playerId === round.winnerPlayerId)?.displayName;
+        const reason = subtypeScenario.winnerRule ?? round.tiebreakReason;
+
+        return `Answer: ${winnerDisplayName ?? round.winnerPlayerId.toUpperCase()} | ${String(reason).replaceAll("_", " ")}`;
+      }
+      default:
+        return `Answer: ${subtypeDemoBreakdown.points.total}`;
+    }
+  })();
+  const singlePlayerBreakdown = scoreFullScenario(singleScenario.players[0]);
+  const singlePlayerDemoAnswer = `Answer: stars ${singlePlayerBreakdown.points.stars} | territories ${singlePlayerBreakdown.points.territories} | resources ${singlePlayerBreakdown.points.resources} | coins ${singlePlayerBreakdown.points.coins} | structure bonus ${singlePlayerBreakdown.points.structureBonus} | total ${singlePlayerBreakdown.points.total}`;
 
   return (
     <main className="mx-auto min-h-full w-full max-w-6xl px-4 py-4 sm:px-6 sm:py-5">
@@ -485,6 +525,7 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                 <CoinPile
                   hidePlayerTotals={activeSubtype === "total_scoring"}
                   scenarioId={subtypeScenario.id}
+                  focusPlayerId={subtypeScenario.players[0]?.playerId}
                   players={subtypeScenario.players.map((player) => ({
                     playerId: player.playerId,
                     displayName: player.displayName,
@@ -498,6 +539,7 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                   action={submitSubtypeTutorAttempt}
                   scenarioId={subtypeScenario.id}
                   subtypeId={activeSubtype}
+                  demoAnswer={subtypeDemoAnswer}
                 />
               ) : (
                 <form action={submitSubtypeTutorAttempt} className="space-y-3">
@@ -562,7 +604,10 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                         Next question
                       </Button>
                     ) : (
-                      <Button type="submit">Submit Answer</Button>
+                      <>
+                        <Button type="submit">Submit Answer</Button>
+                        <DemoAnswerButton answer={subtypeDemoAnswer} />
+                      </>
                     )}
                   </div>
                 </form>
@@ -605,7 +650,6 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
               <h2 className="text-2xl">Walkthrough: Single-Player Gate</h2>
               {singlePlayerUnlocked ? (
                 <div className="space-y-3">
-                  <p className="text-sm text-muted">Scenario <span className="text-foreground">{singleScenario.id}</span> | Consecutive correct: {progress.singlePlayerConsecutiveCorrect}</p>
                   <div className="rounded-xl border border-border bg-surface-2 p-3 text-sm text-muted">
                     <p>
                       You are this faction: <FactionLabel value={singleScenario.players[0].displayName} className="text-base" />
@@ -624,30 +668,6 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                     className="w-full"
                   />
 
-                  <div className="grid gap-2 rounded-xl border border-border bg-surface-2 p-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
-                    {singleScenario.players.map((player, index) => (
-                      <div
-                        key={player.playerId}
-                        className={`rounded-lg border p-3 ${
-                          index === 0
-                            ? "border-accent bg-accent/10"
-                            : "border-border/60 bg-surface"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <FactionLabel value={player.displayName} className="text-sm" />
-                          {index === 0 ? (
-                            <span className="text-[11px] uppercase tracking-[0.16em] text-accent-strong">You are this faction</span>
-                          ) : null}
-                        </div>
-                        <p className="mt-2 text-muted">Stars {player.stars} | Territories {player.territories}</p>
-                        <p className="text-muted">Resources {player.resources} | Coins {player.coins}</p>
-                        <p className="text-muted">Popularity {player.popularity} | Factory {player.factoryControlled ? "Yes" : "No"}</p>
-                        <p className="text-muted">Structure bonus {player.structureBonusCoins ?? 0}</p>
-                      </div>
-                    ))}
-                  </div>
-
                   <form action={submitSinglePlayerScoringAttempt} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     <input type="hidden" name="scenario_id" value={singleScenario.id} />
                     <label className="text-sm text-muted">Stars points<input className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-foreground" type="number" name="stars" required /></label>
@@ -658,6 +678,7 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                     <label className="text-sm text-muted">Total<input className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-foreground" type="number" name="total" required /></label>
                     <div className="flex flex-wrap gap-2 sm:col-span-2 lg:col-span-3">
                       <Button type="submit">Submit Answer</Button>
+                      <DemoAnswerButton answer={singlePlayerDemoAnswer} />
                     </div>
                   </form>
 
@@ -786,7 +807,7 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                       <input type="hidden" name="subtype" value={item.subtypeId} />
                       <button
                         type="submit"
-                        disabled={item.locked}
+                        disabled={item.locked && !demoAccount}
                         className={`w-full rounded-2xl border px-3 py-3 text-left transition-colors ${
                           item.active
                             ? "border-accent bg-accent/15 text-foreground"
@@ -828,7 +849,7 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                           <input type="hidden" name="subtype" value={item.subtypeId} />
                           <button
                             type="submit"
-                            disabled={item.locked}
+                            disabled={item.locked && !demoAccount}
                             className={`w-full rounded-2xl border px-3 py-3 text-left transition-colors ${
                               item.active
                                 ? "border-accent bg-accent/15 text-foreground"
@@ -855,7 +876,7 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                       <input type="hidden" name="subtype" value={item.subtypeId} />
                       <button
                         type="submit"
-                        disabled={item.locked}
+                        disabled={item.locked && !demoAccount}
                         className={`w-full rounded-2xl border px-3 py-3 text-left transition-colors ${
                           item.active
                             ? "border-accent bg-accent/15 text-foreground"
@@ -879,11 +900,11 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                 <input type="hidden" name="stage" value="single-player" />
                 <button
                   type="submit"
-                  disabled={!stageAllowed("single-player", progress, masteredAllSubtypes)}
+                  disabled={!stageAllowed("single-player", progress, masteredAllSubtypes, demoAccount)}
                   className={`w-full rounded-lg border px-3 py-2 text-left transition-colors ${
                     activeStage === "single-player"
                       ? "border-accent bg-accent/15 text-foreground"
-                      : stageAllowed("single-player", progress, masteredAllSubtypes)
+                      : stageAllowed("single-player", progress, masteredAllSubtypes, demoAccount)
                         ? "border-border bg-surface-2 text-foreground hover:bg-surface-3"
                         : "cursor-not-allowed border-border/40 bg-surface-2/40 text-muted"
                   }`}
@@ -896,11 +917,11 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                 <input type="hidden" name="stage" value="multiplayer" />
                 <button
                   type="submit"
-                  disabled={!stageAllowed("multiplayer", progress, masteredAllSubtypes)}
+                  disabled={!stageAllowed("multiplayer", progress, masteredAllSubtypes, demoAccount)}
                   className={`w-full rounded-lg border px-3 py-2 text-left transition-colors ${
                     activeStage === "multiplayer"
                       ? "border-accent bg-accent/15 text-foreground"
-                      : stageAllowed("multiplayer", progress, masteredAllSubtypes)
+                      : stageAllowed("multiplayer", progress, masteredAllSubtypes, demoAccount)
                         ? "border-border bg-surface-2 text-foreground hover:bg-surface-3"
                         : "cursor-not-allowed border-border/40 bg-surface-2/40 text-muted"
                   }`}
@@ -913,11 +934,11 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
                 <input type="hidden" name="stage" value="speed" />
                 <button
                   type="submit"
-                  disabled={!stageAllowed("speed", progress, masteredAllSubtypes)}
+                  disabled={!stageAllowed("speed", progress, masteredAllSubtypes, demoAccount)}
                   className={`w-full rounded-lg border px-3 py-2 text-left transition-colors ${
                     activeStage === "speed"
                       ? "border-accent bg-accent/15 text-foreground"
-                      : stageAllowed("speed", progress, masteredAllSubtypes)
+                      : stageAllowed("speed", progress, masteredAllSubtypes, demoAccount)
                         ? "border-border bg-surface-2 text-foreground hover:bg-surface-3"
                         : "cursor-not-allowed border-border/40 bg-surface-2/40 text-muted"
                   }`}
@@ -932,6 +953,7 @@ export default async function TutorPage({ searchParams }: TutorPageProps) {
           {activeStage === "single-player" || activeStage === "multiplayer" ? (
             <CoinPile
               scenarioId={activeCoinScenarioId}
+              focusPlayerId={coinPlayers[0]?.playerId}
               players={coinPlayers.map((player) => ({
                 playerId: player.playerId,
                 displayName: player.displayName,

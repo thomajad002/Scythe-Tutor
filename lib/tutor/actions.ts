@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { isDemoAccount } from "@/lib/auth/demo";
 import { requireUser } from "@/lib/auth/server";
 import {
   evaluateFullBreakdownAttempt,
@@ -366,6 +367,7 @@ export async function recordSubtypePractice(formData: FormData) {
 export async function submitSubtypeTutorAttempt(formData: FormData) {
   const user = await requireUser();
   const supabase = await createClient();
+  const demoAccount = isDemoAccount(user.email);
   const subtypeId = toSubtypeId(formData.get("subtype_id"));
   const scenarioId = String(formData.get("scenario_id") ?? "");
 
@@ -374,7 +376,7 @@ export async function submitSubtypeTutorAttempt(formData: FormData) {
   }
 
   const current = await getTutorProgressState(user.id);
-  if (!isSubtypeUnlocked(subtypeId, current.subtypeMastery)) {
+  if (!demoAccount && !isSubtypeUnlocked(subtypeId, current.subtypeMastery)) {
     sendError("That subtype is locked until the first five are mastered.");
   }
 
@@ -547,11 +549,12 @@ export async function submitSubtypeTutorAttempt(formData: FormData) {
 export async function recordSinglePlayerAttempt(formData: FormData) {
   const user = await requireUser();
   const supabase = await createClient();
+  const demoAccount = isDemoAccount(user.email);
   const isCorrect = toBoolean(formData.get("is_correct"));
 
   const current = await getTutorProgressState(user.id);
   const unlocked = current.skipCheckPassed || allSubtypesMastered(current.subtypeMastery);
-  if (!unlocked) {
+  if (!demoAccount && !unlocked) {
     sendError("Single-player stage is locked until all subtypes are mastered.");
   }
 
@@ -587,16 +590,17 @@ export async function recordSinglePlayerAttempt(formData: FormData) {
 export async function recordMultiplayerAttempt(formData: FormData) {
   const user = await requireUser();
   const supabase = await createClient();
+  const demoAccount = isDemoAccount(user.email);
   const isCorrect = toBoolean(formData.get("is_correct"));
   const playerCount = toInt(formData.get("player_count"), 2);
 
   const current = await getTutorProgressState(user.id);
   const unlocked = current.skipCheckPassed || current.singlePlayerMastered;
-  if (!unlocked) {
+  if (!demoAccount && !unlocked) {
     sendError("Multiplayer stage is locked until single-player is mastered.");
   }
 
-  if (playerCount > current.maxMultiplayerUnlocked) {
+  if (!demoAccount && playerCount > current.maxMultiplayerUnlocked) {
     sendError("That player count is still locked.");
   }
 
@@ -634,6 +638,7 @@ export async function recordMultiplayerAttempt(formData: FormData) {
 
 export async function submitSinglePlayerScoringAttempt(formData: FormData) {
   const user = await requireUser();
+  const demoAccount = isDemoAccount(user.email);
   const scenarioId = String(formData.get("scenario_id") ?? "");
 
   const scenario = await getTemporaryScenarioById(scenarioId);
@@ -645,7 +650,7 @@ export async function submitSinglePlayerScoringAttempt(formData: FormData) {
 
   const current = await getTutorProgressState(user.id);
   const unlocked = current.skipCheckPassed || allSubtypesMastered(current.subtypeMastery);
-  if (!unlocked) {
+  if (!demoAccount && !unlocked) {
     sendError("Single-player stage is locked until all subtypes are mastered.");
   }
 
@@ -689,11 +694,13 @@ export async function submitSinglePlayerScoringAttempt(formData: FormData) {
     );
   }
 
-  const adaptiveHintLevel = chooseAdaptiveHintLevel(
-    current.singlePlayerConsecutiveCorrect,
-    1,
-    evaluation.errors.length,
-  );
+  const adaptiveHintLevel = evaluation.errors.length >= 3
+    ? 4
+    : evaluation.errors.length === 2
+      ? 3
+      : evaluation.errors.length === 1
+        ? 2
+        : 1;
   const hints = getLayeredHints(evaluation.errors, adaptiveHintLevel);
   sendSuccessWithStage(
     "Attempt evaluated. Review hints and decomposition, then try again.",
@@ -706,6 +713,7 @@ export async function submitSinglePlayerScoringAttempt(formData: FormData) {
 
 export async function submitMultiplayerScoringAttempt(formData: FormData) {
   const user = await requireUser();
+  const demoAccount = isDemoAccount(user.email);
   const scenarioId = String(formData.get("scenario_id") ?? "");
   const playerCount = toInt(formData.get("player_count"), 2);
 
@@ -716,11 +724,11 @@ export async function submitMultiplayerScoringAttempt(formData: FormData) {
 
   const current = await getTutorProgressState(user.id);
   const unlocked = current.skipCheckPassed || current.singlePlayerMastered;
-  if (!unlocked) {
+  if (!demoAccount && !unlocked) {
     sendError("Multiplayer stage is locked until single-player is mastered.");
   }
 
-  if (playerCount > current.maxMultiplayerUnlocked) {
+  if (!demoAccount && playerCount > current.maxMultiplayerUnlocked) {
     sendError("That player count is still locked.");
   }
 

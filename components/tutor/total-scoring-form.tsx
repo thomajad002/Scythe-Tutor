@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DemoAnswerButton } from "@/components/tutor/demo-answer-button";
 
 type BreakdownField = "stars" | "territories" | "resources" | "coins" | "structureBonus";
 
@@ -10,6 +11,7 @@ type TotalScoringFormProps = {
   scenarioId: string;
   subtypeId: string;
   action: (formData: FormData) => void | Promise<void>;
+  demoAnswer: string;
 };
 
 const FIELD_LABELS: Record<BreakdownField, string> = {
@@ -25,7 +27,7 @@ function toNonNegativeInt(value: string): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 }
 
-export function TotalScoringForm({ scenarioId, subtypeId, action }: TotalScoringFormProps) {
+export function TotalScoringForm({ scenarioId, subtypeId, action, demoAnswer }: TotalScoringFormProps) {
   const [values, setValues] = useState<Record<BreakdownField, string>>({
     stars: "",
     territories: "",
@@ -80,6 +82,7 @@ export function TotalScoringForm({ scenarioId, subtypeId, action }: TotalScoring
 
       <div className="flex flex-wrap gap-2">
         <Button type="submit">Submit Answer</Button>
+        <DemoAnswerButton answer={demoAnswer} />
       </div>
     </form>
   );

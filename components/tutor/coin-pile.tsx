@@ -13,6 +13,7 @@ type CoinPileProps = {
   scenarioId: string;
   players: PlayerCoins[];
   hidePlayerTotals?: boolean;
+  focusPlayerId?: string;
 };
 
 type CoinToken = {
@@ -75,7 +76,7 @@ function expandCoinTokens(seedKey: string, coins: number): CoinToken[] {
   return tokens;
 }
 
-export function CoinPile({ scenarioId, players, hidePlayerTotals = false }: CoinPileProps) {
+export function CoinPile({ scenarioId, players, hidePlayerTotals = false, focusPlayerId }: CoinPileProps) {
   const [sortedView, setSortedView] = useState(false);
 
   const playerTokens = useMemo(() => {
@@ -101,11 +102,16 @@ export function CoinPile({ scenarioId, players, hidePlayerTotals = false }: Coin
       <div className="space-y-3">
         {playerTokens.map((player) => (
           <div key={player.playerId} className="rounded-lg border border-border/70 bg-surface-2 p-2">
-            <div className="mb-2 flex items-center justify-between">
+            <div className="mb-2 flex items-center justify-between gap-3">
               <FactionLabel value={player.displayName} className="text-sm" />
-              {hidePlayerTotals ? null : (
-                <p className="text-xs font-semibold text-foreground">{player.coins} coins</p>
-              )}
+              <div className="ml-2 flex items-center gap-2">
+                {player.playerId === focusPlayerId ? (
+                  <span className="text-[11px] uppercase tracking-[0.16em] text-accent-strong">You are this faction</span>
+                ) : null}
+                {hidePlayerTotals ? null : (
+                  <p className="text-xs font-semibold text-foreground">{player.coins} coins</p>
+                )}
+              </div>
             </div>
 
             {sortedView ? (
