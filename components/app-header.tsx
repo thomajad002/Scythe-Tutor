@@ -4,11 +4,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils/cn";
 import type { NavItem } from "@/lib/navigation";
+import { signOut } from "@/lib/auth/actions";
 
 type AppHeaderProps = {
   brandLabel: string;
   brandHref: string;
   navItems: NavItem[];
+  showSignOut?: boolean;
 };
 
 function isActivePath(currentPath: string, href: string) {
@@ -19,7 +21,7 @@ function isActivePath(currentPath: string, href: string) {
   return currentPath === href || currentPath.startsWith(`${href}/`);
 }
 
-export function AppHeader({ brandLabel, brandHref, navItems }: AppHeaderProps) {
+export function AppHeader({ brandLabel, brandHref, navItems, showSignOut = false }: AppHeaderProps) {
   const pathname = usePathname();
 
   return (
@@ -49,6 +51,17 @@ export function AppHeader({ brandLabel, brandHref, navItems }: AppHeaderProps) {
               </Link>
             );
           })}
+
+          {showSignOut ? (
+            <form action={signOut}>
+              <button
+                type="submit"
+                className="rounded-lg px-3 py-2 text-sm text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+              >
+                Sign out
+              </button>
+            </form>
+          ) : null}
         </nav>
       </div>
     </header>

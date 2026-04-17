@@ -48,6 +48,7 @@ export default async function RootLayout({
               brandLabel={headerNavConfig.brand.label}
               brandHref={headerNavConfig.brand.href}
               navItems={navItems}
+              showSignOut={Boolean(user)}
             />
           </div>
           <div className="flex-1 overflow-y-auto overflow-x-clip px-1 pt-20">
