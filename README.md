@@ -1,5 +1,15 @@
 # Scythe Scoring Intelligent Tutor
 
+## Live Demo
+
+Try the app live on Vercel:
+
+[scythe-tutor.vercel.app](https://scythe-tutor.vercel.app)
+
+**Note:** For best performance, especially if you notice slowness on the live app (due to free hosting tier limits), download and run locally using the instructions below.
+
+---
+
 Project for building an intelligent tutoring system that teaches Scythe end-game scoring with deterministic rule-based feedback.
 
 This repository started from a reusable Next.js + Supabase starter and now includes the first Scythe-specific implementation slice.
@@ -64,6 +74,13 @@ npm run dev
 
 The script installs dependencies, starts Supabase, writes `.env.local`, and resets local DB migrations.
 If Docker is not running, the script now exits gracefully after preparing `.env.local` and prints next steps.
+
+### Local Setup Checklist
+
+- Ensure Docker Desktop is running before starting.
+- Run `./setup.sh` to generate `.env.local` and start Supabase.
+- If you encounter port or migration errors, see the Troubleshooting section below.
+- All required environment variables are set by the script; no manual `.env.local` editing is needed unless customizing.
 
 ## Manual Setup
 
