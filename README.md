@@ -6,6 +6,8 @@ Try the app live on Vercel:
 
 [scythe-tutor.vercel.app](https://scythe-tutor.vercel.app)
 
+If login fails, that just means the database had zero users in a long time and paused itself, and it will just need to be run locally.
+
 **Note:** For best performance, especially if you notice slowness on the live app (due to free hosting tier limits), download and run locally using the instructions below.
 
 ---
